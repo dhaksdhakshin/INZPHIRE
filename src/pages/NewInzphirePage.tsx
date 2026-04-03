@@ -1063,7 +1063,7 @@ export default function NewInzphirePage() {
       width: 240,
       color: { dark: "#111111", light: "#ffffff" },
     })
-      .then((url) => {
+      .then((url: string) => {
         if (active) {
           setQrDataUrl(url);
         }
