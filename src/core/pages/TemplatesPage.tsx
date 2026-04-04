@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { useDashboard } from "../app/dashboard-context";
+import { useDashboard } from "../dashboard-context";
 
 const templateFilters = [
   {

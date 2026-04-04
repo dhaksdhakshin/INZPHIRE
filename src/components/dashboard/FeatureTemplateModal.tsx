@@ -1,6 +1,6 @@
 import { X } from "lucide-react";
 
-import type { FeatureTemplateCard, FeatureTemplateCategory } from "../../app/types";
+import type { FeatureTemplateCard, FeatureTemplateCategory } from "../../core/types";
 
 interface FeatureTemplateModalProps {
   category: FeatureTemplateCategory;

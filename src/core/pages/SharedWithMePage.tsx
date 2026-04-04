@@ -1,9 +1,9 @@
 import { useState } from "react";
 
-import { useDashboard } from "../app/dashboard-context";
-import EmptyState from "../components/dashboard/EmptyState";
-import PageSearch from "../components/dashboard/PageSearch";
-import PresentationTable from "../components/dashboard/PresentationTable";
+import { useDashboard } from "../dashboard-context";
+import EmptyState from "../../components/dashboard/EmptyState";
+import PageSearch from "../../components/dashboard/PageSearch";
+import PresentationTable from "../../components/dashboard/PresentationTable";
 
 export default function SharedWithMePage() {
   const {

@@ -4,28 +4,29 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "next dev",
     "dev:api": "node --watch server/index.js",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
+    "build": "next build",
+    "start": "next start",
     "start:api": "node server/index.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
+    "eslint-config-next": "^16.2.2",
     "express": "^4.21.2",
     "lucide-react": "^0.511.0",
     "mongodb": "^6.18.0",
+    "next": "^16.2.2",
     "qrcode": "^1.5.4",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "react-router-dom": "^7.6.2"
   },
   "devDependencies": {
+    "@types/node": "^25.5.2",
     "@types/react": "^19.1.5",
     "@types/react-dom": "^19.1.5",
-    "@vitejs/plugin-react": "^4.5.0",
-    "typescript": "~5.8.3",
-    "vite": "^7.0.0"
+    "typescript": "~5.8.3"
   }
 }

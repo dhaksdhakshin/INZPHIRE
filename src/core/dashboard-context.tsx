@@ -140,7 +140,7 @@ export function DashboardProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     const controller = new AbortController();
-    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
     const endpoint = apiBaseUrl ? `${apiBaseUrl}/api/templates` : "/api/templates";
 
     async function loadTemplates() {

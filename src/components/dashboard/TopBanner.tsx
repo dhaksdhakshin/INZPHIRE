@@ -1,4 +1,4 @@
-import { useDashboard } from "../../app/dashboard-context";
+import { useDashboard } from "../../core/dashboard-context";
 import Icon from "./Icon";
 
 interface TopBannerProps {

@@ -1,15 +1,15 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 
 import AppShell from "../components/dashboard/AppShell";
-import AccountSettingsPage from "../pages/AccountSettingsPage";
-import HomePage from "../pages/HomePage";
-import MyPresentationsPage from "../pages/MyPresentationsPage";
-import NewInzphirePage from "../pages/NewInzphirePage";
-import ParticipantPage from "../pages/ParticipantPage";
-import PlaceholderPage from "../pages/PlaceholderPage";
-import StartWithAiPage from "../pages/StartWithAiPage";
-import SharedWithMePage from "../pages/SharedWithMePage";
-import TemplatesPage from "../pages/TemplatesPage";
+import AccountSettingsPage from "./pages/AccountSettingsPage";
+import HomePage from "./pages/HomePage";
+import MyPresentationsPage from "./pages/MyPresentationsPage";
+import NewInzphirePage from "./pages/NewInzphirePage";
+import ParticipantPage from "./pages/ParticipantPage";
+import PlaceholderPage from "./pages/PlaceholderPage";
+import StartWithAiPage from "./pages/StartWithAiPage";
+import SharedWithMePage from "./pages/SharedWithMePage";
+import TemplatesPage from "./pages/TemplatesPage";
 
 export const router = createBrowserRouter([
   {

@@ -2,7 +2,7 @@ import { ArrowLeft, ChevronDown, Settings2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
 
-import { useDashboard } from "../app/dashboard-context";
+import { useDashboard } from "../dashboard-context";
 
 export default function AccountSettingsPage() {
   const navigate = useNavigate();

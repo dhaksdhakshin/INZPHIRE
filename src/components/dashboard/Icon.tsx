@@ -22,7 +22,7 @@ import {
   Workflow,
 } from "lucide-react";
 
-import type { IconName } from "../../app/types";
+import type { IconName } from "../../core/types";
 
 interface IconProps {
   name: IconName;

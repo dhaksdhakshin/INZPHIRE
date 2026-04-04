@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 
-import { useDashboard } from "../../app/dashboard-context";
+import { useDashboard } from "../../core/dashboard-context";
 
 interface AccountMenuProps {
   onClose: () => void;

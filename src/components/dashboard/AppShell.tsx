@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 
-import { useDashboard } from "../../app/dashboard-context";
+import { useDashboard } from "../../core/dashboard-context";
 import AccountMenu from "./AccountMenu";
 import GlobalSearch from "./GlobalSearch";
 import Icon from "./Icon";

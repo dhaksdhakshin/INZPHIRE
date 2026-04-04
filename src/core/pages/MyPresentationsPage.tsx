@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { useDashboard } from "../app/dashboard-context";
-import EmptyState from "../components/dashboard/EmptyState";
-import PresentationLibraryGrid from "../components/dashboard/PresentationLibraryGrid";
+import { useDashboard } from "../dashboard-context";
+import EmptyState from "../../components/dashboard/EmptyState";
+import PresentationLibraryGrid from "../../components/dashboard/PresentationLibraryGrid";
 
 export default function MyPresentationsPage() {
   const navigate = useNavigate();

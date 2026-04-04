@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronDown, PencilLine, Smartphone } from "lucide-react";
 
-import { useDashboard } from "../../app/dashboard-context";
+import { useDashboard } from "../../core/dashboard-context";
 import FeatureGlyph from "./FeatureGlyph";
 import FeatureTemplateModal from "./FeatureTemplateModal";
 import FourDotLoader from "./FourDotLoader";

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { useDashboard } from "../../app/dashboard-context";
-import type { SearchResult } from "../../app/types";
+import { useDashboard } from "../../core/dashboard-context";
+import type { SearchResult } from "../../core/types";
 import Icon from "./Icon";
 
 const resultKindLabels: Record<SearchResult["kind"], string> = {

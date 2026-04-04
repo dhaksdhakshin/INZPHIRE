@@ -1,4 +1,4 @@
-import { placeholderPages } from "../app/data";
+import { placeholderPages } from "../data";
 
 interface PlaceholderPageProps {
   pageId: keyof typeof placeholderPages;

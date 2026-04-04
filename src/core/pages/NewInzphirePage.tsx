@@ -35,11 +35,11 @@ import {
 } from "lucide-react";
 import QRCode from "qrcode";
 
-import { useDashboard } from "../app/dashboard-context";
-import type { AiBuilderPreview } from "../app/types";
-import FourDotLoader from "../components/dashboard/FourDotLoader";
-import LogoMark from "../components/dashboard/LogoMark";
-import ScratchMenuIcon from "../components/dashboard/ScratchMenuIcon";
+import { useDashboard } from "../dashboard-context";
+import type { AiBuilderPreview } from "../types";
+import FourDotLoader from "../../components/dashboard/FourDotLoader";
+import LogoMark from "../../components/dashboard/LogoMark";
+import ScratchMenuIcon from "../../components/dashboard/ScratchMenuIcon";
 
 const toolPanels = [
   {
@@ -359,6 +359,13 @@ function buildPseudoQrMatrix(seed: string) {
   return matrix;
 }
 
+function generateJoinCode() {
+  const digits = Math.floor(10000000 + Math.random() * 90000000)
+    .toString()
+    .padStart(8, "0");
+  return `${digits.slice(0, 4)} ${digits.slice(4)}`;
+}
+
 export default function NewInzphirePage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -403,8 +410,39 @@ export default function NewInzphirePage() {
   const [liveResults, setLiveResults] = useState<
     Record<string, { counts?: number[]; responses?: string[] }>
   >({});
-  const joinCode = "7117 9512";
-  const publicOrigin = import.meta.env.VITE_PUBLIC_ORIGIN ?? "";
+  const locationState = location.state as
+    | {
+        aiPreview?: AiBuilderPreview;
+        presentationId?: string;
+        title?: string;
+        templateType?: string;
+        templatePrompt?: string;
+        templateIsBlank?: boolean;
+      }
+    | null;
+  const aiPreview = locationState?.aiPreview ?? null;
+  const selectedTitle = locationState?.title;
+  const templateType = locationState?.templateType;
+  const templatePrompt = locationState?.templatePrompt;
+  const templateIsBlank = locationState?.templateIsBlank ?? false;
+  const selectedPresentation = presentations.find(
+    (presentation) => presentation.id === locationState?.presentationId,
+  );
+  const presentationKey = selectedPresentation?.id ?? locationState?.presentationId ?? "scratch";
+  const [joinCode, setJoinCode] = useState(() => {
+    if (typeof window === "undefined") {
+      return "0000 0000";
+    }
+    const storageKey = `inzphire-join-code:${presentationKey}`;
+    const stored = window.localStorage.getItem(storageKey);
+    if (stored) {
+      return stored;
+    }
+    const fresh = generateJoinCode();
+    window.localStorage.setItem(storageKey, fresh);
+    return fresh;
+  });
+  const publicOrigin = process.env.NEXT_PUBLIC_ORIGIN ?? "";
   const joinHost = useMemo(() => {
     if (publicOrigin) {
       try {
@@ -437,24 +475,20 @@ export default function NewInzphirePage() {
   const previousQuestionType = useRef<string | null>(null);
   const deckSeedRef = useRef<string>("");
   const presentationControlsTimeout = useRef<number | null>(null);
-  const locationState = location.state as
-    | {
-        aiPreview?: AiBuilderPreview;
-        presentationId?: string;
-        title?: string;
-        templateType?: string;
-        templatePrompt?: string;
-        templateIsBlank?: boolean;
-      }
-    | null;
-  const aiPreview = locationState?.aiPreview ?? null;
-  const selectedTitle = locationState?.title;
-  const templateType = locationState?.templateType;
-  const templatePrompt = locationState?.templatePrompt;
-  const templateIsBlank = locationState?.templateIsBlank ?? false;
-  const selectedPresentation = presentations.find(
-    (presentation) => presentation.id === locationState?.presentationId,
-  );
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const storageKey = `inzphire-join-code:${presentationKey}`;
+    const stored = window.localStorage.getItem(storageKey);
+    if (stored) {
+      setJoinCode(stored);
+      return;
+    }
+    const fresh = generateJoinCode();
+    window.localStorage.setItem(storageKey, fresh);
+    setJoinCode(fresh);
+  }, [presentationKey]);
 
   const filteredTemplates = useMemo(() => {
     const filter = templateFilters.find((item) => item.id === activeTemplateFilter);

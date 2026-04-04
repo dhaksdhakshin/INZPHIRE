@@ -2,7 +2,7 @@ import { ChevronDown, Ellipsis, Grid2x2, LayoutList, Search, X } from "lucide-re
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import type { FolderItem, Presentation } from "../../app/types";
+import type { FolderItem, Presentation } from "../../core/types";
 import LogoMark from "./LogoMark";
 
 interface PresentationLibraryGridProps {

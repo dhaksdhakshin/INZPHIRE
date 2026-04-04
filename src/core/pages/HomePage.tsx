@@ -1,8 +1,8 @@
 import { useNavigate } from "react-router-dom";
 
-import { useDashboard } from "../app/dashboard-context";
-import DiscoverySections from "../components/dashboard/DiscoverySections";
-import PageSearch from "../components/dashboard/PageSearch";
+import { useDashboard } from "../dashboard-context";
+import DiscoverySections from "../../components/dashboard/DiscoverySections";
+import PageSearch from "../../components/dashboard/PageSearch";
 import { useState } from "react";
 
 export default function HomePage() {

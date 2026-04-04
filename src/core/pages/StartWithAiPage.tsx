@@ -2,12 +2,12 @@ import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react"
 import { ArrowUp, Eye, FileUp, Paintbrush, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
-import { generateAiBuilderResponse } from "../app/ai-builder";
-import { useDashboard } from "../app/dashboard-context";
-import type { AiBuilderMessage, AiBuilderPreview } from "../app/types";
-import DiscoverySections from "../components/dashboard/DiscoverySections";
-import LogoMark from "../components/dashboard/LogoMark";
-import PageSearch from "../components/dashboard/PageSearch";
+import { generateAiBuilderResponse } from "../ai-builder";
+import { useDashboard } from "../dashboard-context";
+import type { AiBuilderMessage, AiBuilderPreview } from "../types";
+import DiscoverySections from "../../components/dashboard/DiscoverySections";
+import LogoMark from "../../components/dashboard/LogoMark";
+import PageSearch from "../../components/dashboard/PageSearch";
 
 const starterOptions = [
   { id: "quiz", label: "Live quiz", color: "#58b467" },

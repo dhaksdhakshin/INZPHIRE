@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import type { FolderItem, Presentation } from "../../app/types";
+import type { FolderItem, Presentation } from "../../core/types";
 import Icon from "./Icon";
 
 interface PresentationTableProps {

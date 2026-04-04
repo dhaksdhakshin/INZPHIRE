@@ -1,4 +1,4 @@
-import type { FeatureTemplate } from "../../app/types";
+import type { FeatureTemplate } from "../../core/types";
 
 interface FeatureGlyphProps {
   feature: FeatureTemplate;
