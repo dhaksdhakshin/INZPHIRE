@@ -555,29 +555,57 @@ export default function NewInzphirePage() {
     return next;
   }
 
-  const recordChoiceResult = (slideId: string, choices: string[], index: number) => {
+  const recordChoiceResult = async (slideId: string, choices: string[], index: number) => {
     const results = parseResults(localStorage.getItem(resultsStorageKey));
     const entry = results[slideId] ?? {};
     const counts = ensureMultipleChoiceOptions(choices);
     const nextCounts = normalizeChoiceCounts(counts, entry.counts);
     nextCounts[index] = (nextCounts[index] ?? 0) + 1;
-    results[slideId] = {
-      ...entry,
-      counts: nextCounts,
+    const finalResults = {
+      ...results,
+      [slideId]: { ...entry, counts: nextCounts },
     };
-    localStorage.setItem(resultsStorageKey, JSON.stringify(results));
-    setLiveResults(results);
+    localStorage.setItem(resultsStorageKey, JSON.stringify(finalResults));
+    setLiveResults(finalResults);
+
+    try {
+      await fetch(`/api/sync?code=${joinCode}&type=results`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: finalResults }),
+      });
+    } catch (err) {
+      console.error("Failed to sync results", err);
+    }
   };
 
   useEffect(() => {
-    const loadResults = () => {
+    const loadResultsFromLocal = () => {
       setLiveResults(parseResults(localStorage.getItem(resultsStorageKey)));
     };
-    loadResults();
-    const interval = window.setInterval(loadResults, 1800);
+    
+    const loadResultsFromBackend = async () => {
+      try {
+        const res = await fetch(`/api/sync?code=${joinCode}&type=results`);
+        if (res.ok) {
+          const { data } = await res.json();
+          if (data) {
+            localStorage.setItem(resultsStorageKey, JSON.stringify(data));
+            setLiveResults(data);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch results", err);
+      }
+      loadResultsFromLocal();
+    };
+
+    loadResultsFromBackend();
+    const interval = window.setInterval(loadResultsFromBackend, 1800);
     const handleStorage = (event: StorageEvent) => {
       if (event.key === resultsStorageKey) {
-        loadResults();
+        loadResultsFromLocal();
       }
     };
     window.addEventListener("storage", handleStorage);
@@ -585,7 +613,7 @@ export default function NewInzphirePage() {
       window.clearInterval(interval);
       window.removeEventListener("storage", handleStorage);
     };
-  }, [resultsStorageKey]);
+  }, [joinCode, resultsStorageKey]);
 
   function handleToolPanelAction(label: string) {
     if (label === "Templates") {
@@ -938,7 +966,17 @@ export default function NewInzphirePage() {
       })),
       updatedAt: Date.now(),
     };
+    
+    // Also save in localStorage for local fallback just in case
     localStorage.setItem(sessionStorageKey, JSON.stringify(snapshot));
+
+    // Sync to backend DB so participants on other devices can see it
+    fetch(`/api/sync?code=${joinCode}&type=session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: snapshot }),
+    }).catch(err => console.error("Failed to sync session", err));
+
   }, [activeSlideIndex, deckSlides, joinCode, sessionStorageKey]);
 
   useEffect(() => {
@@ -1613,6 +1651,12 @@ export default function NewInzphirePage() {
     localStorage.removeItem(resultsStorageKey);
     setLiveResults({});
     pushToast("Results cleared.", "default");
+    
+    fetch(`/api/sync?code=${joinCode}&type=results`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: {} }),
+    }).catch(err => console.error("Failed to clear results", err));
   };
 
   const toggleVotingPause = () => {

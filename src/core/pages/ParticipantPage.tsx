@@ -83,23 +83,22 @@ export default function ParticipantPage() {
   const resultsKey = useMemo(() => `${RESULTS_PREFIX}${joinCode}`, [joinCode]);
 
   useEffect(() => {
-    const loadSession = () => {
-      setSession(parseSession(localStorage.getItem(sessionKey)));
+    const loadSession = async () => {
+      try {
+        const res = await fetch(`/api/sync?code=${joinCode}&type=session`);
+        if (res.ok) {
+          const { data } = await res.json();
+          if (data) setSession(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch session", err);
+      }
     };
 
     loadSession();
     const interval = window.setInterval(loadSession, 1800);
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === sessionKey) {
-        loadSession();
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener("storage", onStorage);
-    };
-  }, [sessionKey]);
+    return () => clearInterval(interval);
+  }, [joinCode]);
 
   useEffect(() => {
     setResponseText("");
@@ -120,34 +119,47 @@ export default function ParticipantPage() {
   const isOpenEnded = activeSlide?.questionType === "open-ended";
   const isText = isWordCloud || isOpenEnded;
 
-  const submitResponse = () => {
+  const submitResponse = async () => {
     if (!activeSlide) {
       return;
     }
-    const results = parseResults(localStorage.getItem(resultsKey));
-    const entry = results[activeSlide.id] ?? {};
-
-    if (isChoice && selectedIndex !== null) {
-      const choices = activeSlide.choices ?? [];
-      const counts = ensureChoiceCounts(choices, entry.counts);
-      counts[selectedIndex] = (counts[selectedIndex] ?? 0) + 1;
-      entry.counts = counts;
-    }
-
-    if (isText && responseText.trim()) {
-      const responses = entry.responses ? [...entry.responses] : [];
-      responses.push(responseText.trim());
-      entry.responses = responses.slice(-40);
-    }
-
-    results[activeSlide.id] = entry;
-    localStorage.setItem(resultsKey, JSON.stringify(results));
-
+    
+    // Optimistic UI for Word Cloud
     if (isWordCloud) {
       setResponseText("");
       setSubmitted(false);
     } else {
       setSubmitted(true);
+    }
+
+    try {
+      const res = await fetch(`/api/sync?code=${joinCode}&type=results`);
+      const { data } = res.ok ? await res.json() : { data: {} };
+      const results = data || {};
+      const entry = (results[activeSlide.id] as ResultEntry) ?? {};
+
+      if (isChoice && selectedIndex !== null) {
+        const choices = activeSlide.choices ?? [];
+        const counts = ensureChoiceCounts(choices, entry.counts);
+        counts[selectedIndex] = (counts[selectedIndex] ?? 0) + 1;
+        entry.counts = counts;
+      }
+
+      if (isText && responseText.trim()) {
+        const responses = entry.responses ? [...entry.responses] : [];
+        responses.push(responseText.trim());
+        entry.responses = responses.slice(-40);
+      }
+
+      results[activeSlide.id] = entry;
+
+      await fetch(`/api/sync?code=${joinCode}&type=results`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: results }),
+      });
+    } catch (err) {
+      console.error("Failed to submit results", err);
     }
   };
 
