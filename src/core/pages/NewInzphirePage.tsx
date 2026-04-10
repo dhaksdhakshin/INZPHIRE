@@ -1636,8 +1636,9 @@ export default function NewInzphirePage() {
   const handleReorderSlide = (fromIndex: number, toIndex: number): void => {
     setSlideDeck((prev) => {
       const newDeck = [...prev];
-      newDeck.splice(fromIndex, 1);
-      newDeck.splice(toIndex, 0, newDeck.splice(fromIndex, 1)[0]);
+      const [movedItem] = newDeck.splice(fromIndex, 1);
+      newDeck.splice(toIndex, 0, movedItem);
+      return newDeck;
     });
     if (activeSlideIndex === fromIndex) {
       setActiveSlideIndex(toIndex);
