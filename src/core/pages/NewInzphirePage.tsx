@@ -1121,6 +1121,13 @@ export default function NewInzphirePage() {
     return terms.slice(-14);
   }, [presentationSlide.id, presentationSlide.type, liveResults]);
 
+  const openEndedResponses = useMemo(() => {
+    if (presentationSlide.questionType !== "open-ended") {
+      return [];
+    }
+    return liveResults[presentationSlide.id]?.responses ?? [];
+  }, [presentationSlide.id, presentationSlide.questionType, liveResults]);
+
   useEffect(() => {
     let active = true;
     QRCode.toDataURL(joinUrl, {
@@ -3201,8 +3208,20 @@ export default function NewInzphirePage() {
                 <div className={`presentation-open${responsesHidden ? " is-hidden" : ""}`}>
                   <h1>{presentationSlide.title}</h1>
                   <p>{presentationSlide.objective || "Let your audience respond in full sentences."}</p>
-                  <div className="presentation-open__box">
-                    <span>Type your response here...</span>
+                  <div className="presentation-open__responses">
+                    {openEndedResponses.length === 0 ? (
+                      <div className="presentation-open__box">
+                        <span>Waiting for responses...</span>
+                      </div>
+                    ) : (
+                      <div className="presentation-open__grid">
+                        {openEndedResponses.map((response, index) => (
+                          <div key={index} className="presentation-open__card">
+                            {response}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (

@@ -5655,21 +5655,45 @@ a {
   color: #6b6b6b;
 }
 
+.presentation-open__responses {
+  max-width: 860px;
+  width: 100%;
+}
+
 .presentation-open__box {
   min-height: 220px;
-  max-width: 860px;
   padding: 22px 26px;
   border-radius: 18px;
-  border: 1px solid #dfdfda;
-  background: #fff;
+  border: 1px dashed #dfdfda;
+  background: transparent;
   color: #b0b0ab;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-family: var(--font-body);
   font-size: 17px;
 }
 
-.presentation-open.is-hidden .presentation-open__box {
+.presentation-open__grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.presentation-open__card {
+  padding: 20px 24px;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #eaeaeb;
+  color: #111;
+  font-size: 18px;
+  line-height: 1.4;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+}
+
+.presentation-open.is-hidden .presentation-open__responses {
   opacity: 0.16;
-  filter: blur(2px);
+  filter: blur(4px);
 }
 
 .presentation-wordcloud__cloud {
