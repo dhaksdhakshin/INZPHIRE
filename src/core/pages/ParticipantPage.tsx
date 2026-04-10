@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
-import { Check, SendHorizontal } from "lucide-react";
+import { Check, SendHorizontal, ThumbsUp } from "lucide-react";
 
 type SlideDeckItem = {
   id: string;
@@ -116,8 +116,9 @@ export default function ParticipantPage() {
 
   const isChoice =
     activeSlide?.type === "multiple-choice" || activeSlide?.type === "scale";
-  const isText =
-    activeSlide?.type === "word-cloud" || activeSlide?.questionType === "open-ended";
+  const isWordCloud = activeSlide?.type === "word-cloud";
+  const isOpenEnded = activeSlide?.questionType === "open-ended";
+  const isText = isWordCloud || isOpenEnded;
 
   const submitResponse = () => {
     if (!activeSlide) {
@@ -141,10 +142,15 @@ export default function ParticipantPage() {
 
     results[activeSlide.id] = entry;
     localStorage.setItem(resultsKey, JSON.stringify(results));
-    setSubmitted(true);
+
+    if (isWordCloud) {
+      setResponseText("");
+      setSubmitted(false);
+    } else {
+      setSubmitted(true);
+    }
   };
 
-  const joinLabel = session?.code || joinCode;
   const questionTitle = activeSlide?.title || "Waiting for a question…";
   const questionHint = activeSlide?.objective || "Respond to the question to join the live session.";
   const choices =
@@ -158,10 +164,6 @@ export default function ParticipantPage() {
     <div className="participant-view">
       <header className="participant-header">
         <span className="participant-logo">INZPHIRE</span>
-        <span className="participant-code">
-          Join at inzphire.com
-          <strong>{joinLabel}</strong>
-        </span>
       </header>
 
       <main className="participant-card">
@@ -186,7 +188,19 @@ export default function ParticipantPage() {
           </div>
         ) : null}
 
-        {isText ? (
+        {isWordCloud ? (
+          <div className="participant-input participant-input--word">
+            <input
+              value={responseText}
+              onChange={(event) => setResponseText(event.target.value)}
+              placeholder="Enter a word"
+              maxLength={25}
+            />
+            <span className="participant-input__count">{Math.max(0, 25 - responseText.length)}</span>
+          </div>
+        ) : null}
+
+        {isOpenEnded ? (
           <div className="participant-input">
             <textarea
               value={responseText}
@@ -197,6 +211,10 @@ export default function ParticipantPage() {
           </div>
         ) : null}
 
+        {isWordCloud ? (
+          <div className="participant-note">You may submit multiple responses</div>
+        ) : null}
+
         {!activeSlide ? (
           <div className="participant-waiting">Waiting for the presentation to begin.</div>
         ) : (
@@ -204,13 +222,41 @@ export default function ParticipantPage() {
             type="button"
             className="participant-submit"
             onClick={submitResponse}
-            disabled={submitted || (isChoice && selectedIndex === null) || (isText && !responseText.trim())}
+            disabled={
+              (submitted && !isWordCloud) ||
+              (isChoice && selectedIndex === null) ||
+              (isText && !responseText.trim())
+            }
           >
-            {submitted ? "Sent" : "Send"}
+            {submitted && !isWordCloud ? "Sent" : "Submit"}
             <SendHorizontal size={16} />
           </button>
         )}
+
+        <button type="button" className="participant-like" aria-label="Like">
+          <ThumbsUp size={18} />
+        </button>
       </main>
+
+      <footer className="participant-footer">
+        <p>
+          Create your own INZPHIRE at{" "}
+          <a href="https://inzphire.com" target="_blank" rel="noreferrer">
+            inzphire.com
+          </a>
+        </p>
+        <p className="participant-footer__legal">
+          By using INZPHIRE you accept our{" "}
+          <a href="https://inzphire.com/terms" target="_blank" rel="noreferrer">
+            terms of use
+          </a>{" "}
+          and{" "}
+          <a href="https://inzphire.com/policies" target="_blank" rel="noreferrer">
+            policies
+          </a>
+          .
+        </p>
+      </footer>
     </div>
   );
 }

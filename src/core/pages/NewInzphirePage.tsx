@@ -20,6 +20,8 @@ import {
   Plus,
   Copy,
   CopyPlus,
+  Play,
+  Pause,
   QrCode,
   RotateCcw,
   Search,
@@ -32,6 +34,8 @@ import {
   Star,
   Trash2,
   X,
+  Lightbulb,
+  XCircle,
 } from "lucide-react";
 import QRCode from "qrcode";
 
@@ -393,6 +397,8 @@ export default function NewInzphirePage() {
   const [responsesHidden, setResponsesHidden] = useState(false);
   const [showHotkeys, setShowHotkeys] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isVotingPaused, setIsVotingPaused] = useState(false);
+  const [participantCount, setParticipantCount] = useState(0);
   const [wordCloudInspectorView, setWordCloudInspectorView] = useState<
     "slide" | "wordcloud" | "question"
   >("wordcloud");
@@ -1065,28 +1071,15 @@ export default function NewInzphirePage() {
     return scaleCounts.map((value) => Math.round((value / max) * 100));
   }, [scaleCounts]);
 
-  const wordCloudDefaults = [
-    "creative",
-    "leader",
-    "focus",
-    "bold",
-    "fast",
-    "inspiration",
-    "transpiration",
-  ];
-
   const wordCloudTerms = useMemo(() => {
     if (presentationSlide.type !== "word-cloud") {
-      return wordCloudDefaults;
+      return [];
     }
     const responses = liveResults[presentationSlide.id]?.responses ?? [];
     const terms = responses
       .flatMap((response) => response.split(/\s+/))
       .map((term) => term.trim())
       .filter(Boolean);
-    if (terms.length === 0) {
-      return wordCloudDefaults;
-    }
     return terms.slice(-14);
   }, [presentationSlide.id, presentationSlide.type, liveResults]);
 
@@ -1413,7 +1406,7 @@ export default function NewInzphirePage() {
     setSlideMenuOpenId(null);
   };
 
-  const handleDuplicateSlide = (index: number) => {
+  const handleDuplicateSlideByIndex = (index: number) => {
     const baseDeck = slideDeck.length > 0 ? slideDeck : seededSlides;
     const source = baseDeck[index];
     if (!source) {
@@ -1622,6 +1615,36 @@ export default function NewInzphirePage() {
     pushToast("Results cleared.", "default");
   };
 
+  const toggleVotingPause = () => {
+    setIsVotingPaused((prev) => !prev);
+    pushToast(isVotingPaused ? "Voting paused" : "Voting resumed", "default");
+  };
+
+  const handleDuplicateSlide = (slideId: string) => {
+    const currentSlide = presentationSlides[activeSlideIndex];
+    if (!currentSlide) return;
+
+    const newSlide = {
+      ...currentSlide,
+      id: `${currentSlide.id}-copy-${Date.now()}`,
+    };
+    setSlideDeck((prev) => [...prev.slice(0, activeSlideIndex), newSlide, ...prev.slice(activeSlideIndex + 1)]);
+    setActiveSlideIndex(activeSlideIndex + 1);
+    pushToast("Slide duplicated", "default");
+  };
+
+  const handleReorderSlide = (fromIndex: number, toIndex: number): void => {
+    setSlideDeck((prev) => {
+      const newDeck = [...prev];
+      newDeck.splice(fromIndex, 1);
+      newDeck.splice(toIndex, 0, newDeck.splice(fromIndex, 1)[0]);
+    });
+    if (activeSlideIndex === fromIndex) {
+      setActiveSlideIndex(toIndex);
+    }
+    pushToast("Slide reordered", "default");
+  };
+
   useEffect(() => {
     if (!isPresenting) {
       return;
@@ -1660,6 +1683,10 @@ export default function NewInzphirePage() {
         event.preventDefault();
         toggleJoinInstructions();
       }
+      if (event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        toggleVotingPause();
+      }
       if (event.key.toLowerCase() === "k" || event.key === "?") {
         event.preventDefault();
         setShowHotkeys((value) => !value);
@@ -1674,7 +1701,7 @@ export default function NewInzphirePage() {
         window.clearTimeout(presentationControlsTimeout.current);
       }
     };
-  }, [isPresenting, presentationSlides.length, showJoinBar, showQrCode]);
+  }, [isPresenting, presentationSlides.length, showJoinBar, showQrCode, isVotingPaused, toggleVotingPause]);
 
   if (isBooting) {
     return (
@@ -2142,7 +2169,7 @@ export default function NewInzphirePage() {
                           className="editor-slide__menu-item"
                           onClick={() => {
                             closeSlideMenu();
-                            handleDuplicateSlide(index);
+                            handleDuplicateSlideByIndex(index);
                           }}
                         >
                           <CopyPlus size={16} />
@@ -2973,6 +3000,19 @@ export default function NewInzphirePage() {
 
       <div className={`presentation-overlay${isPresenting ? " is-visible" : ""}`} aria-hidden={!isPresenting}>
         <div className="presentation-stage">
+          <div className={`presentation-brand${presenterControlsVisible ? " is-visible" : ""}`}>
+            <LogoMark />
+          </div>
+          <div className={`presentation-status${presenterControlsVisible ? " is-visible" : ""}`}>
+            <span className={`presentation-status__dot${isVotingPaused ? " is-paused" : ""}`} />
+            {isVotingPaused ? (
+              <span className="presentation-status__text">Voting paused</span>
+            ) : participantCount === 0 ? (
+              <span className="presentation-status__text">Waiting for participants</span>
+            ) : (
+              <span className="presentation-status__text">{participantCount} participant{participantCount !== 1 ? "s" : ""}</span>
+            )}
+          </div>
           {showJoinBar ? (
             <div className="presentation-join">
               <span>Join at {joinHost} | use code</span>
@@ -3158,12 +3198,19 @@ export default function NewInzphirePage() {
             <ArrowLeft size={16} />
           </button>
           <button type="button" className="presentation-nav__icon" onClick={toggleJoinInstructions}>
-            <MapPin size={16} />
+            <Lightbulb size={16} />
           </button>
-          <button type="button" className="presentation-nav__next" onClick={handlePresentationNext}>
-            <ArrowRight size={16} />
-            Next slide
-          </button>
+          {activeSlideIndex >= presentationSlides.length - 1 ? (
+            <button type="button" className="presentation-nav__end" onClick={handleExitPresentation}>
+              End presentation
+              <XCircle size={16} />
+            </button>
+          ) : (
+            <button type="button" className="presentation-nav__next" onClick={handlePresentationNext}>
+              Next slide
+              <ArrowRight size={16} />
+            </button>
+          )}
         </div>
 
         <div className={`presentation-toolbar${presenterControlsVisible ? " is-visible" : ""}`}>
@@ -3205,9 +3252,17 @@ export default function NewInzphirePage() {
             <QrCode size={16} />
             <span className="presentation-tooltip">QR code</span>
           </button>
-          <button type="button" className="presentation-toolbar__button" onClick={() => pushToast("Participants coming soon.", "default")}>
+          <button type="button" className={`presentation-toolbar__button${isVotingPaused ? " is-active" : ""}`} onClick={toggleVotingPause}>
+            {isVotingPaused ? <Play size={16} /> : <Pause size={16} />}
+            <span className="presentation-tooltip">{isVotingPaused ? "Resume voting" : "Pause voting"}</span>
+          </button>
+          <button
+            type="button"
+            className="presentation-toolbar__button"
+            onClick={() => setParticipantCount((prev) => prev + 1)}
+          >
             <Users size={16} />
-            <span className="presentation-tooltip">Participants</span>
+            <span className="presentation-tooltip">Add participant</span>
           </button>
           <button
             type="button"
@@ -3240,6 +3295,10 @@ export default function NewInzphirePage() {
           <span>{user.initials}!</span>
         </div>
 
+        <div className={`presentation-scroll-hint${presenterControlsVisible ? " is-visible" : ""}`}>
+          Press <span className="presentation-scroll-hint__key">ENTER</span> to stop scrolling
+        </div>
+
         {showHotkeys ? (
           <div className="presentation-hotkeys" role="dialog" aria-modal="true">
             <button
@@ -3255,6 +3314,7 @@ export default function NewInzphirePage() {
               <li><span>Next slide</span><kbd>→</kbd> <kbd>Space</kbd></li>
               <li><span>Previous slide</span><kbd>←</kbd></li>
               <li><span>Fullscreen</span><kbd>F</kbd></li>
+              <li><span>Pause/Resume voting</span><kbd>P</kbd></li>
               <li><span>Hide responses</span><kbd>H</kbd></li>
               <li><span>Toggle join info</span><kbd>I</kbd></li>
               <li><span>Hotkeys</span><kbd>K</kbd></li>
