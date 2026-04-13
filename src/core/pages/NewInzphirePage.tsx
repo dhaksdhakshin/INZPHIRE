@@ -98,7 +98,7 @@ const templateFilters = [
 
 const QR_GRID_SIZE = 21;
 const DEFAULT_MULTIPLE_CHOICE_OPTIONS = ["Option 1", "Option 2", "Option 3", "Option 4"];
-type PresentationSlideType = "title" | "word-cloud" | "scale" | "pie" | "text" | "multiple-choice";
+type PresentationSlideType = "title" | "word-cloud" | "scale" | "pie" | "text" | "multiple-choice" | "ranking" | "qna" | "hundred-points" | "grid-2x2" | "pin-image" | "select-answer" | "type-answer" | "image-choice" | "reactions" | "quick-form" | "comments" | "gather-names" | "leaderboard" | "timer" | "instructions" | "content";
 type QuestionTypeKey = keyof typeof QUESTION_TYPE_TO_PRESENTATION_TYPE;
 type SlideDeckItem = {
   id: string;
@@ -111,6 +111,26 @@ type SlideDeckItem = {
   choiceCounts?: number[];
   label?: string;
   skipped?: boolean;
+  options?: string[];
+  imageUrl?: string;
+  imageOptions?: Array<{ id: string; url: string; label: string }>;
+  scaleMin?: number;
+  scaleMax?: number;
+  scaleMinLabel?: string;
+  scaleMaxLabel?: string;
+  gridXLabel?: string;
+  gridYLabel?: string;
+  timerDuration?: number;
+  quizPoints?: number;
+  quizTimerSeconds?: number;
+  correctAnswers?: string[];
+  correctAnswerIndex?: number;
+  formFields?: Array<{ id: string; label: string; type: "email" | "text" | "phone" }>;
+  contentHtml?: string;
+  instructionSteps?: string[];
+  reactions?: string[];
+  maxResponseLength?: number;
+  maxResponses?: number;
 };
 
 type ThemePreset = {
@@ -248,14 +268,25 @@ const QUESTION_TYPE_TO_PRESENTATION_TYPE: Record<string, PresentationSlideType> 
   "multiple-choice": "multiple-choice",
   "open-ended": "text",
   scales: "scale",
-  ranking: "scale",
-  qna: "text",
-  "guess-number": "text",
-  "points-100": "pie",
-  "grid-2x2": "text",
-  "pin-image": "text",
-  "select-answer": "pie",
-  "type-answer": "text",
+  ranking: "ranking",
+  qna: "qna",
+  "guess-number": "scale",
+  "points-100": "hundred-points",
+  "grid-2x2": "grid-2x2",
+  "pin-image": "pin-image",
+  "select-answer": "select-answer",
+  "type-answer": "type-answer",
+  "image-choice": "image-choice",
+  "reactions": "reactions",
+  "quick-form": "quick-form",
+  "comments": "comments",
+  "gather-names": "gather-names",
+  "leaderboard": "leaderboard",
+  "timer": "timer",
+  "instructions": "instructions",
+  "content": "content",
+  "hundred-points": "hundred-points",
+  "two-by-two": "grid-2x2",
 };
 
 function inferQuestionTypeFromSlide(title: string, interaction: string): QuestionTypeKey {
@@ -296,6 +327,18 @@ function inferQuestionTypeFromSlide(title: string, interaction: string): Questio
   if (signature.includes("type answer")) {
     return "type-answer";
   }
+  if (signature.includes("image choice")) return "image-choice";
+  if (signature.includes("hundred points")) return "hundred-points";
+  if (signature.includes("two by two") || signature.includes("2x2 matrix")) return "two-by-two";
+  if (signature.includes("pin on image")) return "pin-image";
+  if (signature.includes("reaction")) return "reactions";
+  if (signature.includes("quick form")) return "quick-form";
+  if (signature.includes("comment")) return "comments";
+  if (signature.includes("gather name")) return "gather-names";
+  if (signature.includes("timer")) return "timer";
+  if (signature.includes("instruction")) return "instructions";
+  if (signature.includes("content slide")) return "content";
+  if (signature.includes("leaderboard")) return "leaderboard";
   if (signature.includes("title") || signature.includes("intro")) {
     return "open-ended";
   }
@@ -583,8 +626,121 @@ export default function NewInzphirePage() {
     const loadResultsFromLocal = () => {
       setLiveResults(parseResults(localStorage.getItem(resultsStorageKey)));
     };
-    
+
+    // Aggregate raw responses into renderer-friendly format
+    const aggregateResponses = (
+      rawResponses: Array<{ slideId: string; data: any }>,
+    ): Record<string, { counts?: number[]; responses?: string[] }> => {
+      const result: Record<string, { counts?: number[]; responses?: string[] }> = {};
+
+      for (const entry of rawResponses) {
+        const sid = entry.slideId;
+        if (!sid) continue;
+        if (!result[sid]) result[sid] = {};
+        const payload = entry.data;
+        if (!payload) continue;
+
+        // Text-based (word cloud, open ended)
+        if (payload.type === "text") {
+          if (!result[sid].responses) result[sid].responses = [];
+          result[sid].responses!.push(payload.value);
+        }
+        // Multiple choice / quiz selection
+        else if (payload.type === "choice" || (payload.type === "quiz_answer" && typeof payload.index === "number")) {
+          const idx = payload.index ?? 0;
+          if (!result[sid].counts) result[sid].counts = [];
+          while (result[sid].counts!.length <= idx) result[sid].counts!.push(0);
+          result[sid].counts![idx]++;
+        }
+        // Scale
+        else if (payload.type === "scale") {
+          if (!result[sid].responses) result[sid].responses = [];
+          result[sid].responses!.push(String(payload.value));
+        }
+        // Ranking
+        else if (payload.type === "ranking") {
+          if (!result[sid].responses) result[sid].responses = [];
+          result[sid].responses!.push(JSON.stringify(payload.order));
+        }
+        // Points
+        else if (payload.type === "points") {
+          if (!result[sid].responses) result[sid].responses = [];
+          result[sid].responses!.push(JSON.stringify(payload.values));
+        }
+        // Grid
+        else if (payload.type === "grid") {
+          if (!result[sid].responses) result[sid].responses = [];
+          result[sid].responses!.push(JSON.stringify({ x: payload.x, y: payload.y }));
+        }
+        // Pin
+        else if (payload.type === "pin") {
+          if (!result[sid].responses) result[sid].responses = [];
+          result[sid].responses!.push(JSON.stringify({ x: payload.x, y: payload.y }));
+        }
+        // Image choice
+        else if (payload.type === "image_choice") {
+          if (!result[sid].responses) result[sid].responses = [];
+          result[sid].responses!.push(payload.imageId);
+        }
+        // Form
+        else if (payload.type === "form") {
+          if (!result[sid].responses) result[sid].responses = [];
+          result[sid].responses!.push(JSON.stringify(payload.fields));
+        }
+        // Name
+        else if (payload.type === "name") {
+          if (!result[sid].responses) result[sid].responses = [];
+          result[sid].responses!.push(payload.name);
+        }
+        // Quiz typed answer
+        else if (payload.type === "quiz_answer") {
+          if (!result[sid].responses) result[sid].responses = [];
+          result[sid].responses!.push(payload.answer);
+        }
+      }
+
+      return result;
+    };
+
     const loadResultsFromBackend = async () => {
+      try {
+        // Fetch raw participant responses
+        const res = await fetch(`/api/sync?code=${joinCode}&type=responses`);
+        if (res.ok) {
+          const { data } = await res.json();
+          if (data && Array.isArray(data) && data.length > 0) {
+            const aggregated = aggregateResponses(data);
+            // Merge with any existing local results (from presenter's own clicks)
+            const local = parseResults(localStorage.getItem(resultsStorageKey));
+            const merged = { ...local };
+            for (const [slideId, slideResult] of Object.entries(aggregated)) {
+              if (!merged[slideId]) {
+                merged[slideId] = slideResult;
+              } else {
+                // Merge counts
+                if (slideResult.counts) {
+                  if (!merged[slideId].counts) merged[slideId].counts = [];
+                  for (let i = 0; i < slideResult.counts.length; i++) {
+                    while (merged[slideId].counts!.length <= i) merged[slideId].counts!.push(0);
+                    merged[slideId].counts![i] = slideResult.counts[i];
+                  }
+                }
+                // Merge responses
+                if (slideResult.responses) {
+                  merged[slideId].responses = slideResult.responses;
+                }
+              }
+            }
+            localStorage.setItem(resultsStorageKey, JSON.stringify(merged));
+            setLiveResults(merged);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch responses", err);
+      }
+
+      // Also try legacy results endpoint
       try {
         const res = await fetch(`/api/sync?code=${joinCode}&type=results`);
         if (res.ok) {
@@ -595,14 +751,13 @@ export default function NewInzphirePage() {
             return;
           }
         }
-      } catch (err) {
-        console.error("Failed to fetch results", err);
-      }
+      } catch {}
+
       loadResultsFromLocal();
     };
 
     loadResultsFromBackend();
-    const interval = window.setInterval(loadResultsFromBackend, 1800);
+    const interval = window.setInterval(loadResultsFromBackend, 800);
     const handleStorage = (event: StorageEvent) => {
       if (event.key === resultsStorageKey) {
         loadResultsFromLocal();
@@ -725,6 +880,94 @@ export default function NewInzphirePage() {
         colorClass: "editor-inspector__icon--green",
         previewTitle: "Type Answer",
         previewObjective: "Let participants type their answer.",
+        group: "quiz",
+      },
+      "image-choice": {
+        label: "Image Choice",
+        icon: "image-choice",
+        colorClass: "editor-inspector__icon--blue",
+        previewTitle: "Image Choice",
+        previewObjective: "Let participants vote on images.",
+        group: "interactive",
+      },
+      "hundred-points": {
+        label: "100 Points",
+        icon: "points-100",
+        colorClass: "editor-inspector__icon--blue",
+        previewTitle: "100 Points",
+        previewObjective: "Distribute 100 points across options.",
+        group: "interactive",
+      },
+      "two-by-two": {
+        label: "2 x 2 Grid",
+        icon: "grid-2x2",
+        colorClass: "editor-inspector__icon--salmon",
+        previewTitle: "2 x 2 Grid",
+        previewObjective: "Place items in a 2 x 2 matrix.",
+        group: "interactive",
+      },
+      reactions: {
+        label: "Reactions",
+        icon: "reactions",
+        colorClass: "editor-inspector__icon--purple",
+        previewTitle: "Reactions",
+        previewObjective: "Collect emoji reactions from the audience.",
+        group: "interactive",
+      },
+      "quick-form": {
+        label: "Quick Form",
+        icon: "quick-form",
+        colorClass: "editor-inspector__icon--gold",
+        previewTitle: "Quick Form",
+        previewObjective: "Collect emails and other data.",
+        group: "interactive",
+      },
+      comments: {
+        label: "Comments",
+        icon: "comments",
+        colorClass: "editor-inspector__icon--blue",
+        previewTitle: "Comments",
+        previewObjective: "Live chat during presentation.",
+        group: "interactive",
+      },
+      "gather-names": {
+        label: "Gather Names",
+        icon: "gather-names",
+        colorClass: "editor-inspector__icon--blue",
+        previewTitle: "Gather Names",
+        previewObjective: "Collect participant names.",
+        group: "interactive",
+      },
+      timer: {
+        label: "Timer",
+        icon: "timer",
+        colorClass: "editor-inspector__icon--amber",
+        previewTitle: "Timer",
+        previewObjective: "Countdown timer for activities.",
+        group: "interactive",
+      },
+      instructions: {
+        label: "Instructions",
+        icon: "instructions",
+        colorClass: "editor-inspector__icon--slate",
+        previewTitle: "Instructions",
+        previewObjective: "Show how to join and participate.",
+        group: "interactive",
+      },
+      content: {
+        label: "Content Slide",
+        icon: "content",
+        colorClass: "editor-inspector__icon--slate",
+        previewTitle: "Content Slide",
+        previewObjective: "Plain text/image content.",
+        group: "interactive",
+      },
+      leaderboard: {
+        label: "Leaderboard",
+        icon: "leaderboard",
+        colorClass: "editor-inspector__icon--gold",
+        previewTitle: "Leaderboard",
+        previewObjective: "Display top 10 scores.",
         group: "quiz",
       },
     }),
@@ -963,6 +1206,26 @@ export default function NewInzphirePage() {
         type: slide.type,
         questionType: slide.questionType,
         choices: slide.choices,
+        options: slide.choices,
+        imageUrl: slide.imageUrl,
+        imageOptions: slide.imageOptions,
+        scaleMin: slide.scaleMin,
+        scaleMax: slide.scaleMax,
+        scaleMinLabel: slide.scaleMinLabel,
+        scaleMaxLabel: slide.scaleMaxLabel,
+        gridXLabel: slide.gridXLabel,
+        gridYLabel: slide.gridYLabel,
+        timerDuration: slide.timerDuration,
+        quizPoints: slide.quizPoints,
+        quizTimerSeconds: slide.quizTimerSeconds,
+        correctAnswers: slide.correctAnswers,
+        correctAnswerIndex: slide.correctAnswerIndex,
+        formFields: slide.formFields,
+        contentHtml: slide.contentHtml,
+        instructionSteps: slide.instructionSteps,
+        reactions: slide.reactions,
+        maxResponseLength: slide.maxResponseLength,
+        maxResponses: slide.maxResponses,
       })),
       updatedAt: Date.now(),
     };
@@ -1280,6 +1543,42 @@ export default function NewInzphirePage() {
     });
   };
 
+  /* ── Ranking item handlers ── */
+  const handleRankingItemChange = (index: number, value: string) => {
+    updateActiveSlide((slide) => {
+      const items = [...(slide.choices ?? ["Item 1", "Item 2", "Item 3", "Item 4"])];
+      items[index] = value;
+      return { ...slide, choices: items };
+    });
+  };
+
+  const handleAddRankingItem = () => {
+    updateActiveSlide((slide) => {
+      const items = [...(slide.choices ?? ["Item 1", "Item 2", "Item 3", "Item 4"])];
+      items.push(`Item ${items.length + 1}`);
+      return { ...slide, choices: items };
+    });
+  };
+
+  const handleRemoveRankingItem = (index: number) => {
+    updateActiveSlide((slide) => {
+      const items = [...(slide.choices ?? [])];
+      if (items.length <= 2) return slide;
+      items.splice(index, 1);
+      return { ...slide, choices: items };
+    });
+  };
+
+  const handleReorderRankingItem = (index: number, direction: number) => {
+    updateActiveSlide((slide) => {
+      const items = [...(slide.choices ?? [])];
+      const target = index + direction;
+      if (target < 0 || target >= items.length) return slide;
+      [items[index], items[target]] = [items[target], items[index]];
+      return { ...slide, choices: items };
+    });
+  };
+
   const handleMultipleChoiceVote = (index: number) => {
     if (!activeDeckSlide) {
       return;
@@ -1341,13 +1640,25 @@ export default function NewInzphirePage() {
       type: QUESTION_TYPE_TO_PRESENTATION_TYPE[type] ?? "text",
       questionType: type,
     };
-    if (type === "multiple-choice") {
+    if (type === "multiple-choice" || type === "select-answer") {
       baseSlide.choices = [...DEFAULT_MULTIPLE_CHOICE_OPTIONS];
       baseSlide.choiceCounts = Array.from({ length: baseSlide.choices.length }, () => 0);
     }
-    if (type === "scales") {
+    if (type === "scales" || type === "guess-number") {
       baseSlide.choices = [...scaleOptions];
       baseSlide.choiceCounts = Array.from({ length: baseSlide.choices.length }, () => 0);
+    }
+    if (type === "ranking") {
+      baseSlide.choices = ["First Item", "Second Item", "Third Item", "Fourth Item"];
+    }
+    if (type === "points-100" || type === "hundred-points") {
+      baseSlide.choices = ["Option A", "Option B", "Option C"];
+    }
+    if (type === "grid-2x2" || type === "two-by-two") {
+      baseSlide.choices = ["Item 1", "Item 2", "Item 3"];
+    }
+    if (type === "image-choice") {
+      baseSlide.choices = ["Image 1", "Image 2", "Image 3"];
     }
     return baseSlide;
   };
@@ -2034,6 +2345,27 @@ export default function NewInzphirePage() {
                   />
                   <span className="scratch-menu__label">Pin on Image</span>
                 </button>
+                <button type="button" className="scratch-menu__item" onClick={() => handleScratchSelect("image-choice")}>
+                  <ScratchMenuIcon
+                    name="image-choice"
+                    className="scratch-menu__icon scratch-menu__icon--blue"
+                  />
+                  <span className="scratch-menu__label">Image Choice</span>
+                </button>
+                <button type="button" className="scratch-menu__item" onClick={() => handleScratchSelect("hundred-points")}>
+                  <ScratchMenuIcon
+                    name="points-100"
+                    className="scratch-menu__icon scratch-menu__icon--blue"
+                  />
+                  <span className="scratch-menu__label">100 Points</span>
+                </button>
+                <button type="button" className="scratch-menu__item" onClick={() => handleScratchSelect("two-by-two")}>
+                  <ScratchMenuIcon
+                    name="grid-2x2"
+                    className="scratch-menu__icon scratch-menu__icon--salmon"
+                  />
+                  <span className="scratch-menu__label">2 x 2 Grid</span>
+                </button>
               </div>
             </section>
 
@@ -2056,6 +2388,39 @@ export default function NewInzphirePage() {
                     className="scratch-menu__icon scratch-menu__icon--green"
                   />
                   <span className="scratch-menu__label">Type Answer</span>
+                </button>
+              </div>
+            </section>
+
+            <section className="scratch-menu__section">
+              <header className="scratch-menu__section-header">
+                <span>Audience interaction</span>
+                <CircleHelp size={16} />
+              </header>
+              <div className="scratch-menu__grid scratch-menu__grid--compact">
+                <button type="button" className="scratch-menu__item" onClick={() => handleScratchSelect("reactions")}>
+                  <ScratchMenuIcon name="reactions" className="scratch-menu__icon scratch-menu__icon--purple" />
+                  <span className="scratch-menu__label">Reactions</span>
+                </button>
+                <button type="button" className="scratch-menu__item" onClick={() => handleScratchSelect("quick-form")}>
+                  <ScratchMenuIcon name="quick-form" className="scratch-menu__icon scratch-menu__icon--gold" />
+                  <span className="scratch-menu__label">Quick Form</span>
+                </button>
+                <button type="button" className="scratch-menu__item" onClick={() => handleScratchSelect("comments")}>
+                  <ScratchMenuIcon name="comments" className="scratch-menu__icon scratch-menu__icon--blue" />
+                  <span className="scratch-menu__label">Comments</span>
+                </button>
+                <button type="button" className="scratch-menu__item" onClick={() => handleScratchSelect("gather-names")}>
+                  <ScratchMenuIcon name="gather-names" className="scratch-menu__icon scratch-menu__icon--blue" />
+                  <span className="scratch-menu__label">Gather Names</span>
+                </button>
+                <button type="button" className="scratch-menu__item" onClick={() => handleScratchSelect("timer")}>
+                  <ScratchMenuIcon name="timer" className="scratch-menu__icon scratch-menu__icon--amber" />
+                  <span className="scratch-menu__label">Timer</span>
+                </button>
+                <button type="button" className="scratch-menu__item" onClick={() => handleScratchSelect("leaderboard")}>
+                  <ScratchMenuIcon name="leaderboard" className="scratch-menu__icon scratch-menu__icon--gold" />
+                  <span className="scratch-menu__label">Leaderboard</span>
                 </button>
               </div>
             </section>
@@ -2491,29 +2856,363 @@ export default function NewInzphirePage() {
                   </div>
                   {qrOverlay}
                 </div>
-              ) : (
-                <article className="editor-generated-slide">
-                  {showJoinBar ? (
-                    <div className="editor-join-bar">
-                      <span>Join at {joinHost} | use code</span>
-                      <strong>{joinCode}</strong>
-                    </div>
-                  ) : null}
-                  <div className="editor-join-brand">
-                    <LogoMark />
-                  </div>
-                  <div className="editor-generated-slide__eyebrow">{activeQuestionConfig.label}</div>
-                  <h2>{activeQuestionConfig.previewTitle}</h2>
-                  <p>{activeQuestionConfig.previewObjective}</p>
-                  <footer className="editor-generated-slide__footer">
-                    <span>{aiPreview?.title ?? selectedPresentation?.title ?? "Presentation"}</span>
-                    <strong>
-                      {activeSlideIndex + 1}/{deckSlides.length}
-                    </strong>
-                  </footer>
-                  {qrOverlay}
-                </article>
-              )
+              ) : (() => {
+                const slideTitle = activeDeckSlide?.title ?? activeQuestionConfig.previewTitle;
+                const slideObj = activeDeckSlide?.objective ?? activeQuestionConfig.previewObjective;
+                const slideChoices: string[] = activeDeckSlide?.choices ?? [];
+                const joinBarEl = showJoinBar ? (<div className="editor-join-bar"><span>Join at {joinHost} | use code</span><strong>{joinCode}</strong></div>) : null;
+                const brandEl = <div className="editor-join-brand"><LogoMark /></div>;
+                const footerEl = (<footer className="editor-generated-slide__footer"><span>{aiPreview?.title ?? selectedPresentation?.title ?? "Presentation"}</span><strong>{activeSlideIndex + 1}/{deckSlides.length}</strong></footer>);
+                const rankingColors = ["#6366f1", "#ec4899", "#3b82f6", "#f59e0b", "#10b981", "#8b5cf6", "#ef4444"];
+
+                if (selectedQuestionType === "ranking") {
+                  const items = slideChoices.length > 0 ? slideChoices : ["Item 1", "Item 2", "Item 3", "Item 4"];
+                  return (
+                    <article className="editor-generated-slide" style={{ alignContent: "start", paddingTop: 48 }}>{joinBarEl}{brandEl}
+                      <div className="editor-wordcloud__question" onClick={() => { setInspectorTab("slide"); setWordCloudInspectorView("question"); }}>
+                        <span className="editor-wordcloud__label">Your question</span>
+                        <input value={slideTitle} onChange={(e) => handleWordCloudQuestionChange(e.target.value)} placeholder="Ask your question here..." aria-label="Ranking question" style={{ fontSize: 26, fontWeight: 400, letterSpacing: "-0.02em" }} />
+                      </div>
+                      <div style={{ width: "100%", maxWidth: 580, display: "flex", flexDirection: "column", gap: 0, margin: "0 auto", textAlign: "left" }}>
+                        {items.map((c, i) => (
+                          <div key={i} style={{ position: "relative", padding: "10px 0 14px", borderBottom: i < items.length - 1 ? "1px solid #eeeaf8" : "none" }}>
+                            <input
+                              value={c}
+                              onChange={(e) => handleRankingItemChange(i, e.target.value)}
+                              placeholder={`Item ${i + 1}`}
+                              aria-label={`Ranking item ${i + 1}`}
+                              style={{ width: "100%", border: "none", outline: "none", background: "transparent", fontSize: 15, fontWeight: 500, color: "#1f1f1f", padding: "4px 0", fontFamily: "inherit" }}
+                            />
+                            <div style={{ width: "100%", height: 4, borderRadius: 2, background: "#f1f0ed", overflow: "hidden", marginTop: 4 }}>
+                              <div style={{ width: `${Math.max(10, 80 - i * 15)}%`, height: "100%", borderRadius: 2, background: rankingColors[i % rankingColors.length], transition: "width 500ms ease" }} />
+                            </div>
+                            {/* Action buttons on hover - reorder + delete */}
+                            <div style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", display: "flex", gap: 4, opacity: 0.5 }}>
+                              {i > 0 && <button type="button" onClick={() => handleReorderRankingItem(i, -1)} style={{ width: 24, height: 24, border: "1px solid #e5e5e1", borderRadius: 6, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#666" }}>↑</button>}
+                              {i < items.length - 1 && <button type="button" onClick={() => handleReorderRankingItem(i, 1)} style={{ width: 24, height: 24, border: "1px solid #e5e5e1", borderRadius: 6, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#666" }}>↓</button>}
+                              {items.length > 2 && <button type="button" onClick={() => handleRemoveRankingItem(i)} style={{ width: 24, height: 24, border: "1px solid #e5e5e1", borderRadius: 6, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#c44949" }}>✕</button>}
+                            </div>
+                          </div>
+                        ))}
+                        <button type="button" onClick={handleAddRankingItem} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: "50%", background: "#6366f1", border: "none", color: "#fff", fontSize: 18, margin: "12px 0 0", cursor: "pointer", lineHeight: 1 }}>+</button>
+                      </div>
+                      {footerEl}{qrOverlay}
+                    </article>
+                  );
+                }
+
+                if (selectedQuestionType === "qna") {
+                  return (
+                    <article className="editor-generated-slide">{joinBarEl}{brandEl}
+                      <div className="editor-wordcloud__question" onClick={() => { setInspectorTab("slide"); setWordCloudInspectorView("question"); }}>
+                        <span className="editor-wordcloud__label">Your question</span>
+                        <input value={slideTitle} onChange={(e) => handleWordCloudQuestionChange(e.target.value)} placeholder="Ask your question here..." aria-label="Q&A question" />
+                      </div>
+                      <div style={{ width: "100%", maxWidth: 540, margin: "8px auto 0", padding: "40px 32px", border: "1px solid #e5e5e1", borderRadius: 16, background: "#fafaf9", textAlign: "center" }}>
+                        <h3 style={{ fontSize: 22, fontWeight: 600, color: "#1f1f1f", margin: "0 0 10px" }}>No questions from the audience!</h3>
+                        <p style={{ fontSize: 15, color: "#7b7b78", margin: 0, lineHeight: 1.5 }}>Incoming questions will show up here so that you can answer them one by one.</p>
+                      </div>
+                      {footerEl}{qrOverlay}
+                    </article>
+                  );
+                }
+
+                if (selectedQuestionType === "guess-number") {
+                  return (
+                    <article className="editor-generated-slide">{joinBarEl}{brandEl}
+                      <div className="editor-wordcloud__question" onClick={() => { setInspectorTab("slide"); setWordCloudInspectorView("question"); }}>
+                        <span className="editor-wordcloud__label">Your question</span>
+                        <input value={slideTitle} onChange={(e) => handleWordCloudQuestionChange(e.target.value)} placeholder="Ask your question here..." aria-label="Guess question" />
+                      </div>
+                      <div style={{ width: "100%", maxWidth: 520, margin: "8px auto 0", textAlign: "center" }}>
+                        {/* Bell curve SVG */}
+                        <svg viewBox="0 0 400 140" style={{ width: "100%", height: 140 }}>
+                          <defs><linearGradient id="bellGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#e2e1f8" stopOpacity="0.6"/><stop offset="100%" stopColor="#e2e1f8" stopOpacity="0.1"/></linearGradient></defs>
+                          <path d="M0,130 C30,130 60,128 100,120 C140,108 160,80 180,40 C190,20 200,10 200,10 C200,10 210,20 220,40 C240,80 260,108 300,120 C340,128 370,130 400,130 Z" fill="url(#bellGrad)" stroke="#c8c6e8" strokeWidth="1.5"/>
+                        </svg>
+                        {/* Number indicator */}
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 14px", borderRadius: 12, background: "#e8e7ef", margin: "-20px 0 12px" }}>
+                          <span style={{ width: 20, height: 20, borderRadius: "50%", background: "#c8f3d2", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700 }}>✓</span>
+                          <strong style={{ fontSize: 18 }}>7</strong>
+                        </div>
+                        {/* Scale line */}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 4px" }}>
+                          <span style={{ fontSize: 13, color: "#7b7b78" }}>0</span>
+                          <div style={{ flex: 1, height: 2, margin: "0 12px", background: "#e5e5e1", position: "relative" }}>
+                            <div style={{ position: "absolute", left: "70%", top: "50%", transform: "translate(-50%, -50%)", width: 0, height: 0, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: "8px solid #6366f1" }} />
+                          </div>
+                          <span style={{ fontSize: 13, color: "#7b7b78" }}>10</span>
+                        </div>
+                      </div>
+                      {footerEl}{qrOverlay}
+                    </article>
+                  );
+                }
+
+                if (selectedQuestionType === "points-100" || selectedQuestionType === "hundred-points") {
+                  const bars = slideChoices.length > 0 ? slideChoices : ["Item 1", "Item 2", "Item 3"];
+                  return (
+                    <article className="editor-generated-slide">{joinBarEl}{brandEl}
+                      <div className="editor-wordcloud__question" onClick={() => { setInspectorTab("slide"); setWordCloudInspectorView("question"); }}>
+                        <span className="editor-wordcloud__label">Your question</span>
+                        <input value={slideTitle} onChange={(e) => handleWordCloudQuestionChange(e.target.value)} placeholder="Ask your question here..." aria-label="100 points question" />
+                      </div>
+                      <div style={{ width: "100%", maxWidth: 520, margin: "8px auto 0", display: "flex", flexDirection: "column", gap: 0, textAlign: "left" }}>
+                        {bars.map((b, i) => (
+                          <div key={i} style={{ padding: "12px 0", borderBottom: "1px solid #eeeaf8" }}>
+                            <div style={{ fontSize: 15, fontWeight: 500, color: "#1f1f1f", marginBottom: 6 }}>{b}</div>
+                            <div style={{ width: "100%", height: 4, borderRadius: 2, background: "#f1f0ed", overflow: "hidden" }}>
+                              <div style={{ width: `${60 - i * 18}%`, height: "100%", borderRadius: 2, background: rankingColors[i % rankingColors.length] }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {footerEl}{qrOverlay}
+                    </article>
+                  );
+                }
+
+                if (selectedQuestionType === "grid-2x2" || selectedQuestionType === "two-by-two") {
+                  return (
+                    <article className="editor-generated-slide">{joinBarEl}{brandEl}
+                      <div className="editor-wordcloud__question" onClick={() => { setInspectorTab("slide"); setWordCloudInspectorView("question"); }}>
+                        <span className="editor-wordcloud__label">Your question</span>
+                        <input value={slideTitle} onChange={(e) => handleWordCloudQuestionChange(e.target.value)} placeholder="Ask your question here..." aria-label="Grid question" />
+                      </div>
+                      <div style={{ position: "relative", width: 320, height: 240, margin: "8px auto 0", border: "1px solid #e5e5e1", borderRadius: 12, background: "#fafaf9" }}>
+                        <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1, background: "#e5e5e1" }} />
+                        <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 1, background: "#e5e5e1" }} />
+                        <div style={{ position: "absolute", left: "30%", top: "25%", width: 12, height: 12, borderRadius: "50%", background: "#6366f1", boxShadow: "0 1px 3px rgba(0,0,0,0.15)" }} />
+                        <div style={{ position: "absolute", left: "65%", top: "60%", width: 12, height: 12, borderRadius: "50%", background: "#ec4899", boxShadow: "0 1px 3px rgba(0,0,0,0.15)" }} />
+                        <div style={{ position: "absolute", left: "45%", top: "70%", width: 12, height: 12, borderRadius: "50%", background: "#10b981", boxShadow: "0 1px 3px rgba(0,0,0,0.15)" }} />
+                      </div>
+                      {footerEl}{qrOverlay}
+                    </article>
+                  );
+                }
+
+                if (selectedQuestionType === "pin-image") {
+                  return (
+                    <article className="editor-generated-slide">{joinBarEl}{brandEl}
+                      <div className="editor-wordcloud__question" onClick={() => { setInspectorTab("slide"); setWordCloudInspectorView("question"); }}>
+                        <span className="editor-wordcloud__label">Your question</span>
+                        <input value={slideTitle} onChange={(e) => handleWordCloudQuestionChange(e.target.value)} placeholder="Ask your question here..." aria-label="Pin question" />
+                      </div>
+                      <div style={{ position: "relative", width: "100%", maxWidth: 500, height: 240, margin: "8px auto 0", borderRadius: 12, background: "#f5f5f3", border: "1px solid #e5e5e1", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <span style={{ fontSize: 14, color: "#8a8a86" }}>📍 Drop an image here or upload one</span>
+                        <div style={{ position: "absolute", left: "35%", top: "40%", transform: "translate(-50%, -100%)" }}>
+                          <svg width="20" height="28" viewBox="0 0 24 32"><path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 20 12 20s12-11 12-20C24 5.4 18.6 0 12 0z" fill="#ef4444"/><circle cx="12" cy="12" r="5" fill="#fff"/></svg>
+                        </div>
+                        <div style={{ position: "absolute", left: "62%", top: "55%", transform: "translate(-50%, -100%)" }}>
+                          <svg width="20" height="28" viewBox="0 0 24 32"><path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 20 12 20s12-11 12-20C24 5.4 18.6 0 12 0z" fill="#3b82f6"/><circle cx="12" cy="12" r="5" fill="#fff"/></svg>
+                        </div>
+                      </div>
+                      {footerEl}{qrOverlay}
+                    </article>
+                  );
+                }
+
+                if (selectedQuestionType === "select-answer") {
+                  const opts = slideChoices.length > 0 ? slideChoices : ["Option 1", "Option 2", "Option 3", "Option 4"];
+                  return (
+                    <article className="editor-generated-slide">{joinBarEl}{brandEl}
+                      <div className="editor-wordcloud__question" onClick={() => { setInspectorTab("slide"); setWordCloudInspectorView("question"); }}>
+                        <span className="editor-wordcloud__label">Your question</span>
+                        <input value={slideTitle} onChange={(e) => handleWordCloudQuestionChange(e.target.value)} placeholder="Ask your question here..." aria-label="Quiz question" />
+                      </div>
+                      <div style={{ width: "100%", maxWidth: 520, margin: "8px auto 0", display: "flex", flexDirection: "column", gap: 8 }}>
+                        {opts.map((o, i) => {
+                          const isCorrect = activeDeckSlide?.correctAnswerIndex === i;
+                          return (
+                            <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 12, border: isCorrect ? "2px solid #34d399" : "1px solid #e5e5e1", background: isCorrect ? "#f0fdf9" : "#fff" }}>
+                              <span style={{ width: 28, height: 28, borderRadius: "50%", background: isCorrect ? "#34d399" : "#f1f0ed", color: isCorrect ? "#fff" : "#4b4b4b", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13, flexShrink: 0 }}>{String.fromCharCode(65 + i)}</span>
+                              <span style={{ flex: 1, fontSize: 15, fontWeight: 500, color: "#1f1f1f" }}>{o}</span>
+                              {isCorrect && <span style={{ fontSize: 16, color: "#34d399" }}>✓</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {footerEl}{qrOverlay}
+                    </article>
+                  );
+                }
+
+                if (selectedQuestionType === "type-answer") {
+                  return (
+                    <article className="editor-generated-slide">{joinBarEl}{brandEl}
+                      <div className="editor-wordcloud__question" onClick={() => { setInspectorTab("slide"); setWordCloudInspectorView("question"); }}>
+                        <span className="editor-wordcloud__label">Your question</span>
+                        <input value={slideTitle} onChange={(e) => handleWordCloudQuestionChange(e.target.value)} placeholder="Ask your question here..." aria-label="Type answer question" />
+                      </div>
+                      <div style={{ width: "100%", maxWidth: 420, margin: "12px auto 0" }}>
+                        <div style={{ padding: "16px 20px", borderRadius: 14, border: "1px solid #e5e5e1", background: "#fafaf9", textAlign: "center" }}>
+                          <span style={{ fontSize: 15, color: "#b0b0ab" }}>Type your answer...</span>
+                        </div>
+                        {(activeDeckSlide?.correctAnswers ?? []).length > 0 && (
+                          <div style={{ marginTop: 12, fontSize: 14, color: "#10b981", textAlign: "center", fontWeight: 600 }}>✓ Accepted: {(activeDeckSlide?.correctAnswers ?? []).join(", ")}</div>
+                        )}
+                      </div>
+                      {footerEl}{qrOverlay}
+                    </article>
+                  );
+                }
+
+                if (selectedQuestionType === "image-choice") {
+                  const imgs = slideChoices.length > 0 ? slideChoices : ["Image 1", "Image 2", "Image 3"];
+                  return (
+                    <article className="editor-generated-slide">{joinBarEl}{brandEl}
+                      <div className="editor-wordcloud__question" onClick={() => { setInspectorTab("slide"); setWordCloudInspectorView("question"); }}>
+                        <span className="editor-wordcloud__label">Your question</span>
+                        <input value={slideTitle} onChange={(e) => handleWordCloudQuestionChange(e.target.value)} placeholder="Ask your question here..." aria-label="Image choice question" />
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(imgs.length, 3)}, 1fr)`, gap: 12, maxWidth: 520, margin: "8px auto 0" }}>
+                        {imgs.map((img, i) => (
+                          <div key={i} style={{ borderRadius: 12, overflow: "hidden", border: "1px solid #e5e5e1", background: "#fff" }}>
+                            <div style={{ paddingBottom: "70%", background: `${rankingColors[i % rankingColors.length]}12`, display: "flex", alignItems: "center", justifyContent: "center" }} />
+                            <div style={{ padding: "10px 12px", fontSize: 13, fontWeight: 500, color: "#1f1f1f", textAlign: "center" }}>{img}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {footerEl}{qrOverlay}
+                    </article>
+                  );
+                }
+
+                if (selectedQuestionType === "reactions") {
+                  return (
+                    <article className="editor-generated-slide">{joinBarEl}{brandEl}
+                      <div className="editor-wordcloud__question" onClick={() => { setInspectorTab("slide"); setWordCloudInspectorView("question"); }}>
+                        <span className="editor-wordcloud__label">Your question</span>
+                        <input value={slideTitle} onChange={(e) => handleWordCloudQuestionChange(e.target.value)} placeholder="Ask your question here..." aria-label="Reactions question" />
+                      </div>
+                      <div style={{ display: "flex", gap: 28, justifyContent: "center", margin: "20px auto 0" }}>
+                        {["😍","👏","🎉","🤔","👎"].map((e) => (
+                          <div key={e} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+                            <span style={{ fontSize: 40 }}>{e}</span>
+                            <span style={{ fontSize: 14, color: "#8a8a86", fontWeight: 600 }}>0</span>
+                          </div>
+                        ))}
+                      </div>
+                      {footerEl}{qrOverlay}
+                    </article>
+                  );
+                }
+
+                if (selectedQuestionType === "quick-form") {
+                  return (
+                    <article className="editor-generated-slide">{joinBarEl}{brandEl}
+                      <div className="editor-wordcloud__question" onClick={() => { setInspectorTab("slide"); setWordCloudInspectorView("question"); }}>
+                        <span className="editor-wordcloud__label">Your question</span>
+                        <input value={slideTitle} onChange={(e) => handleWordCloudQuestionChange(e.target.value)} placeholder="Ask your question here..." aria-label="Form title" />
+                      </div>
+                      <div style={{ width: "100%", maxWidth: 420, margin: "8px auto 0", display: "flex", flexDirection: "column", gap: 10 }}>
+                        {["Email", "Name", "Phone"].map((field) => (
+                          <div key={field} style={{ padding: "12px 16px", borderRadius: 12, border: "1px solid #e5e5e1", background: "#fafaf9" }}>
+                            <span style={{ fontSize: 14, color: "#b0b0ab" }}>{field}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {footerEl}{qrOverlay}
+                    </article>
+                  );
+                }
+
+                if (selectedQuestionType === "comments") {
+                  return (
+                    <article className="editor-generated-slide">{joinBarEl}{brandEl}
+                      <div className="editor-wordcloud__question" onClick={() => { setInspectorTab("slide"); setWordCloudInspectorView("question"); }}>
+                        <span className="editor-wordcloud__label">Your question</span>
+                        <input value={slideTitle} onChange={(e) => handleWordCloudQuestionChange(e.target.value)} placeholder="Ask your question here..." aria-label="Comments title" />
+                      </div>
+                      <div style={{ width: "100%", maxWidth: 480, margin: "8px auto 0", padding: "32px 24px", border: "1px solid #e5e5e1", borderRadius: 16, background: "#fafaf9", textAlign: "center" }}>
+                        <p style={{ fontSize: 18, fontWeight: 600, color: "#1f1f1f", margin: "0 0 8px" }}>No comments yet</p>
+                        <p style={{ fontSize: 14, color: "#7b7b78", margin: 0 }}>Comments from the audience will appear here in real time.</p>
+                      </div>
+                      {footerEl}{qrOverlay}
+                    </article>
+                  );
+                }
+
+                if (selectedQuestionType === "gather-names") {
+                  return (
+                    <article className="editor-generated-slide">{joinBarEl}{brandEl}
+                      <div className="editor-wordcloud__question" onClick={() => { setInspectorTab("slide"); setWordCloudInspectorView("question"); }}>
+                        <span className="editor-wordcloud__label">Your question</span>
+                        <input value={slideTitle} onChange={(e) => handleWordCloudQuestionChange(e.target.value)} placeholder="Ask your question here..." aria-label="Gather names title" />
+                      </div>
+                      <div style={{ width: "100%", maxWidth: 480, margin: "8px auto 0", padding: "32px 24px", border: "1px solid #e5e5e1", borderRadius: 16, background: "#fafaf9", textAlign: "center" }}>
+                        <p style={{ fontSize: 18, fontWeight: 600, color: "#1f1f1f", margin: "0 0 8px" }}>Waiting for participants</p>
+                        <p style={{ fontSize: 14, color: "#7b7b78", margin: 0 }}>Names will appear here as participants join.</p>
+                      </div>
+                      {footerEl}{qrOverlay}
+                    </article>
+                  );
+                }
+
+                if (selectedQuestionType === "timer") {
+                  return (
+                    <article className="editor-generated-slide">{joinBarEl}{brandEl}
+                      <div className="editor-generated-slide__eyebrow">{activeQuestionConfig.label}</div>
+                      <div style={{ textAlign: "center", margin: "12px auto 0" }}>
+                        <div style={{ fontSize: 72, fontWeight: 700, color: "#1f1f1f", fontVariantNumeric: "tabular-nums", letterSpacing: "0.02em" }}>1:00</div>
+                        <div style={{ width: 240, height: 6, borderRadius: 3, background: "#e5e5e1", margin: "16px auto 0", overflow: "hidden" }}>
+                          <div style={{ width: "100%", height: "100%", borderRadius: 3, background: "#6366f1" }} />
+                        </div>
+                      </div>
+                      {footerEl}{qrOverlay}
+                    </article>
+                  );
+                }
+
+                if (selectedQuestionType === "leaderboard") {
+                  return (
+                    <article className="editor-generated-slide">{joinBarEl}{brandEl}
+                      <div className="editor-generated-slide__eyebrow">{activeQuestionConfig.label}</div>
+                      <div style={{ textAlign: "center", margin: "0 auto" }}>
+                        <div style={{ fontSize: 48, marginBottom: 8 }}>🏆</div>
+                        <h2 style={{ fontSize: 24, fontWeight: 600, color: "#1f1f1f", marginBottom: 20 }}>{slideTitle}</h2>
+                      </div>
+                      <div style={{ width: "100%", maxWidth: 400, margin: "0 auto", display: "flex", flexDirection: "column", gap: 8 }}>
+                        {["1st Place", "2nd Place", "3rd Place"].map((p, i) => {
+                          const medalColors = ["#FFD700", "#C0C0C0", "#CD7F32"];
+                          return (
+                            <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", borderRadius: 12, border: "1px solid #e5e5e1", background: "#fff" }}>
+                              <span style={{ width: 28, height: 28, borderRadius: "50%", background: medalColors[i], color: "#111", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13, flexShrink: 0 }}>{i + 1}</span>
+                              <span style={{ fontSize: 15, fontWeight: 500, color: "#4b4b4b" }}>{p}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {footerEl}{qrOverlay}
+                    </article>
+                  );
+                }
+
+                if (selectedQuestionType === "instructions" || selectedQuestionType === "content") {
+                  return (
+                    <article className="editor-generated-slide">{joinBarEl}{brandEl}
+                      <div className="editor-wordcloud__question" onClick={() => { setInspectorTab("slide"); setWordCloudInspectorView("question"); }}>
+                        <span className="editor-wordcloud__label">Title</span>
+                        <input value={slideTitle} onChange={(e) => handleWordCloudQuestionChange(e.target.value)} placeholder="Your heading here..." aria-label="Content title" />
+                      </div>
+                      <div style={{ width: "100%", maxWidth: 500, margin: "0 auto", padding: "24px", border: "1px solid #e5e5e1", borderRadius: 14, background: "#fafaf9", textAlign: "center" }}>
+                        <p style={{ color: "#7b7b78", fontSize: 15, margin: 0, lineHeight: 1.6 }}>{slideObj || "Add your content here. Participants will see this on the big screen."}</p>
+                      </div>
+                      {footerEl}{qrOverlay}
+                    </article>
+                  );
+                }
+
+                // Default fallback
+                return (
+                  <article className="editor-generated-slide">{joinBarEl}{brandEl}
+                    <div className="editor-generated-slide__eyebrow">{activeQuestionConfig.label}</div>
+                    <h2>{slideTitle}</h2>
+                    <p>{slideObj}</p>
+                    {footerEl}{qrOverlay}
+                  </article>
+                );
+              })()
             ) : (
               <div className="editor-create">
                 <div className="editor-create__eyebrow">
@@ -2929,6 +3628,54 @@ export default function NewInzphirePage() {
                         </span>
                       ) : null}
                     </button>
+                    <button
+                      type="button"
+                      className={`editor-inspector__dropdown-item${selectedQuestionType === "image-choice" ? " is-active" : ""}`}
+                      onClick={() => handleQuestionTypeSelect("image-choice")}
+                    >
+                      <ScratchMenuIcon
+                        name="image-choice"
+                        className="editor-inspector__icon editor-inspector__icon--blue"
+                      />
+                      Image Choice
+                      {selectedQuestionType === "image-choice" ? (
+                        <span className="editor-inspector__dropdown-check">
+                          <Check size={16} />
+                        </span>
+                      ) : null}
+                    </button>
+                    <button
+                      type="button"
+                      className={`editor-inspector__dropdown-item${selectedQuestionType === "hundred-points" ? " is-active" : ""}`}
+                      onClick={() => handleQuestionTypeSelect("hundred-points")}
+                    >
+                      <ScratchMenuIcon
+                        name="points-100"
+                        className="editor-inspector__icon editor-inspector__icon--blue"
+                      />
+                      100 Points
+                      {selectedQuestionType === "hundred-points" ? (
+                        <span className="editor-inspector__dropdown-check">
+                          <Check size={16} />
+                        </span>
+                      ) : null}
+                    </button>
+                    <button
+                      type="button"
+                      className={`editor-inspector__dropdown-item${selectedQuestionType === "two-by-two" ? " is-active" : ""}`}
+                      onClick={() => handleQuestionTypeSelect("two-by-two")}
+                    >
+                      <ScratchMenuIcon
+                        name="grid-2x2"
+                        className="editor-inspector__icon editor-inspector__icon--salmon"
+                      />
+                      2 x 2 Grid
+                      {selectedQuestionType === "two-by-two" ? (
+                        <span className="editor-inspector__dropdown-check">
+                          <Check size={16} />
+                        </span>
+                      ) : null}
+                    </button>
                   </div>
                   <span className="editor-inspector__dropdown-title">Quiz competitions</span>
                   <div className="editor-inspector__dropdown-list">
@@ -2959,6 +3706,105 @@ export default function NewInzphirePage() {
                       />
                       Type Answer
                       {selectedQuestionType === "type-answer" ? (
+                        <span className="editor-inspector__dropdown-check">
+                          <Check size={16} />
+                        </span>
+                      ) : null}
+                    </button>
+                  </div>
+                  <span className="editor-inspector__dropdown-title">Audience interaction</span>
+                  <div className="editor-inspector__dropdown-list">
+                    <button
+                      type="button"
+                      className={`editor-inspector__dropdown-item${selectedQuestionType === "reactions" ? " is-active" : ""}`}
+                      onClick={() => handleQuestionTypeSelect("reactions")}
+                    >
+                      <ScratchMenuIcon
+                        name="reactions"
+                        className="editor-inspector__icon editor-inspector__icon--purple"
+                      />
+                      Reactions
+                      {selectedQuestionType === "reactions" ? (
+                        <span className="editor-inspector__dropdown-check">
+                          <Check size={16} />
+                        </span>
+                      ) : null}
+                    </button>
+                    <button
+                      type="button"
+                      className={`editor-inspector__dropdown-item${selectedQuestionType === "quick-form" ? " is-active" : ""}`}
+                      onClick={() => handleQuestionTypeSelect("quick-form")}
+                    >
+                      <ScratchMenuIcon
+                        name="quick-form"
+                        className="editor-inspector__icon editor-inspector__icon--gold"
+                      />
+                      Quick Form
+                      {selectedQuestionType === "quick-form" ? (
+                        <span className="editor-inspector__dropdown-check">
+                          <Check size={16} />
+                        </span>
+                      ) : null}
+                    </button>
+                    <button
+                      type="button"
+                      className={`editor-inspector__dropdown-item${selectedQuestionType === "comments" ? " is-active" : ""}`}
+                      onClick={() => handleQuestionTypeSelect("comments")}
+                    >
+                      <ScratchMenuIcon
+                        name="comments"
+                        className="editor-inspector__icon editor-inspector__icon--blue"
+                      />
+                      Comments
+                      {selectedQuestionType === "comments" ? (
+                        <span className="editor-inspector__dropdown-check">
+                          <Check size={16} />
+                        </span>
+                      ) : null}
+                    </button>
+                    <button
+                      type="button"
+                      className={`editor-inspector__dropdown-item${selectedQuestionType === "gather-names" ? " is-active" : ""}`}
+                      onClick={() => handleQuestionTypeSelect("gather-names")}
+                    >
+                      <ScratchMenuIcon
+                        name="gather-names"
+                        className="editor-inspector__icon editor-inspector__icon--blue"
+                      />
+                      Gather Names
+                      {selectedQuestionType === "gather-names" ? (
+                        <span className="editor-inspector__dropdown-check">
+                          <Check size={16} />
+                        </span>
+                      ) : null}
+                    </button>
+                    <button
+                      type="button"
+                      className={`editor-inspector__dropdown-item${selectedQuestionType === "timer" ? " is-active" : ""}`}
+                      onClick={() => handleQuestionTypeSelect("timer")}
+                    >
+                      <ScratchMenuIcon
+                        name="timer"
+                        className="editor-inspector__icon editor-inspector__icon--amber"
+                      />
+                      Timer
+                      {selectedQuestionType === "timer" ? (
+                        <span className="editor-inspector__dropdown-check">
+                          <Check size={16} />
+                        </span>
+                      ) : null}
+                    </button>
+                    <button
+                      type="button"
+                      className={`editor-inspector__dropdown-item${selectedQuestionType === "leaderboard" ? " is-active" : ""}`}
+                      onClick={() => handleQuestionTypeSelect("leaderboard")}
+                    >
+                      <ScratchMenuIcon
+                        name="leaderboard"
+                        className="editor-inspector__icon editor-inspector__icon--gold"
+                      />
+                      Leaderboard
+                      {selectedQuestionType === "leaderboard" ? (
                         <span className="editor-inspector__dropdown-check">
                           <Check size={16} />
                         </span>
@@ -3134,6 +3980,7 @@ export default function NewInzphirePage() {
             {presentationSlide.type === "scale" ? (
               <div className={`presentation-scale${responsesHidden ? " is-hidden" : ""}`}>
                 <h1>{presentationSlide.title}</h1>
+                {presentationSlide.objective ? <p style={{ opacity: 0.6, margin: "0 0 16px" }}>{presentationSlide.objective}</p> : null}
                 <div className="presentation-scale__statements">
                   {scaleLabels.map((option, index) => (
                     <div key={option} className="presentation-scale__statement">
@@ -3157,6 +4004,7 @@ export default function NewInzphirePage() {
             {presentationSlide.type === "pie" ? (
               <div className={`presentation-pie${responsesHidden ? " is-hidden" : ""}`}>
                 <h1>{presentationSlide.title}</h1>
+                {presentationSlide.objective ? <p style={{ opacity: 0.6, marginBottom: 16, margin: 0 }}>{presentationSlide.objective}</p> : null}
                 <div className="presentation-pie__content">
                   <div className="presentation-pie__chart" />
                   <div className="presentation-pie__legend">
@@ -3225,10 +4073,382 @@ export default function NewInzphirePage() {
                   </div>
                 </div>
               ) : (
-                <div className="presentation-text">
-                  <h1>{presentationSlide.title}</h1>
+                <div className="presentation-text" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20, textAlign: "center", padding: 40 }}>
+                  <h1 style={{ fontSize: "clamp(24px, 4vw, 48px)", marginBottom: 8 }}>{presentationSlide.title}</h1>
+                  {presentationSlide.objective ? <p style={{ fontSize: 18, opacity: 0.7, margin: 0 }}>{presentationSlide.objective}</p> : null}
+                  <div style={{ marginTop: 24, display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center", maxWidth: 600 }}>
+                    {(presentationSlide.choices ?? []).map((choice, i) => (
+                      <span key={i} style={{ padding: "10px 20px", border: "2px solid rgba(255,255,255,0.3)", borderRadius: 12, fontSize: 16, color: "rgba(255,255,255,0.8)", background: "rgba(255,255,255,0.08)" }}>
+                        {choice}
+                      </span>
+                    ))}
+                  </div>
+                  <p style={{ marginTop: 16, fontSize: 14, opacity: 0.5 }}>Participants can respond on their device</p>
                 </div>
               )
+            ) : null}
+
+            {presentationSlide.type === "ranking" ? (() => {
+              const responses = liveResults[presentationSlide.id]?.responses ?? [];
+              const labels = presentationSlide.choices ?? [];
+              const rankColors = ["#4B62F0", "#E8587A", "#4B62F0", "#E8A838", "#4B62F0", "#E8587A", "#3BBEAB", "#E8A838"];
+              const rankScores: Record<string, number> = {};
+              labels.forEach((l) => { rankScores[l] = 0; });
+              responses.forEach((r) => {
+                try {
+                  const order = JSON.parse(r);
+                  if (Array.isArray(order)) order.forEach((idx: number, rank: number) => {
+                    const label = labels[idx];
+                    if (label) rankScores[label] += labels.length - rank;
+                  });
+                } catch {}
+              });
+              const sorted = Object.entries(rankScores).sort((a, b) => b[1] - a[1]);
+              const maxScore = Math.max(1, ...sorted.map(([,v]) => v));
+              const hasResponses = responses.length > 0;
+              return (
+                <div className={`presentation-ranking${responsesHidden ? " is-hidden" : ""}`} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", gap: 0, padding: "48px 48px 32px", width: "100%" }}>
+                  <h1 style={{ fontSize: "clamp(26px,4vw,42px)", marginBottom: 4, fontWeight: 700, letterSpacing: "-0.02em", textAlign: "center" }}>{presentationSlide.title || "Ranking"}</h1>
+                  {presentationSlide.objective ? <p style={{ opacity: 0.6, margin: "0 0 24px", fontSize: 18, textAlign: "center" }}>{presentationSlide.objective}</p> : <div style={{ height: 24 }} />}
+                  <div style={{ width: "100%", maxWidth: 720, display: "flex", flexDirection: "column", gap: 6 }}>
+                    {(hasResponses ? sorted : labels.map((l) => [l, 0] as [string, number])).map(([label, score], i) => {
+                      const barWidth = hasResponses ? Math.max(8, (Number(score) / maxScore) * 100) : Math.max(8, 90 - i * 15);
+                      return (
+                        <div key={label} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                          <span style={{ fontSize: 15, fontWeight: 500, color: "rgba(255,255,255,0.85)", padding: "0 2px" }}>{label}</span>
+                          <div style={{ width: "100%", height: 6, borderRadius: 3, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+                            <div style={{ width: `${barWidth}%`, height: "100%", borderRadius: 3, background: rankColors[i % rankColors.length], transition: "width 800ms cubic-bezier(0.34,1.56,0.64,1)" }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {sorted.length === 0 && labels.length === 0 && <div style={{ textAlign: "center", color: "rgba(255,255,255,0.5)", padding: 40 }}>Waiting for rankings...</div>}
+                  </div>
+                  <div style={{ marginTop: 20, fontSize: 14, opacity: 0.5 }}>{responses.length} response{responses.length !== 1 ? "s" : ""}</div>
+                </div>
+              );
+            })() : null}
+
+            {presentationSlide.type === "qna" ? (() => {
+              const responses = liveResults[presentationSlide.id]?.responses ?? [];
+              return (
+                <div className={`presentation-qna${responsesHidden ? " is-hidden" : ""}`} style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: 48, width: "100%" }}>
+                  <h1 style={{ fontSize: "clamp(24px,4vw,44px)", marginBottom: 8 }}>{presentationSlide.title}</h1>
+                  <p style={{ opacity: 0.6, margin: "0 0 24px", fontSize: 18 }}>{presentationSlide.objective || "Collect questions from the audience."}</p>
+                  <div style={{ width: "100%", maxWidth: 700, display: "flex", flexDirection: "column", gap: 12, maxHeight: 500, overflowY: "auto" }}>
+                    {responses.length === 0 ? (
+                      <div style={{ textAlign: "center", color: "rgba(255,255,255,0.5)", padding: 48, border: "2px dashed rgba(255,255,255,0.15)", borderRadius: 16 }}>
+                        <div style={{ fontSize: 48, marginBottom: 12 }}>❓</div>
+                        <div style={{ fontSize: 18 }}>Waiting for questions...</div>
+                        <div style={{ fontSize: 14, opacity: 0.6, marginTop: 8 }}>Participants can submit questions on their devices</div>
+                      </div>
+                    ) : responses.map((q, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 14, padding: "16px 20px", background: "rgba(255,255,255,0.08)", borderRadius: 14, border: "1px solid rgba(255,255,255,0.1)" }}>
+                        <span style={{ fontSize: 20, flexShrink: 0, marginTop: 2 }}>💬</span>
+                        <span style={{ fontSize: 17, lineHeight: 1.5, flex: 1 }}>{q}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 16, fontSize: 14, opacity: 0.5 }}>{responses.length} question{responses.length !== 1 ? "s" : ""}</div>
+                </div>
+              );
+            })() : null}
+
+            {presentationSlide.type === "hundred-points" ? (() => {
+              const responses = liveResults[presentationSlide.id]?.responses ?? [];
+              const labels = presentationSlide.choices ?? [];
+              const totals: Record<string, number> = {};
+              labels.forEach((l) => { totals[l] = 0; });
+              responses.forEach((r) => {
+                try {
+                  const vals = JSON.parse(r);
+                  if (vals && typeof vals === "object") Object.entries(vals).forEach(([k, v]) => { if (totals[k] !== undefined) totals[k] += Number(v); });
+                } catch {}
+              });
+              const maxVal = Math.max(1, ...Object.values(totals));
+              const colors = ["#6b5cff", "#f472b6", "#34d399", "#fbbf24", "#60a5fa", "#a78bfa", "#fb923c"];
+              return (
+                <div className={`presentation-hundred${responsesHidden ? " is-hidden" : ""}`} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 48, width: "100%" }}>
+                  <h1 style={{ fontSize: "clamp(24px,4vw,44px)", marginBottom: 8 }}>{presentationSlide.title}</h1>
+                  {presentationSlide.objective ? <p style={{ opacity: 0.6, margin: "0 0 20px", fontSize: 18 }}>{presentationSlide.objective}</p> : null}
+                  <div style={{ width: "100%", maxWidth: 700, display: "flex", flexDirection: "column", gap: 12 }}>
+                    {labels.map((label, i) => (
+                      <div key={label} style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                        <span style={{ width: 140, fontSize: 15, fontWeight: 600, textAlign: "right", flexShrink: 0 }}>{label}</span>
+                        <div style={{ flex: 1, height: 32, borderRadius: 8, background: "rgba(255,255,255,0.08)", overflow: "hidden", position: "relative" }}>
+                          <div style={{ width: `${(totals[label] / maxVal) * 100}%`, height: "100%", borderRadius: 8, background: colors[i % colors.length], transition: "width 600ms ease" }} />
+                        </div>
+                        <span style={{ width: 50, fontSize: 15, fontWeight: 700, textAlign: "left" }}>{totals[label]}</span>
+                      </div>
+                    ))}
+                    {labels.length === 0 && <div style={{ textAlign: "center", color: "rgba(255,255,255,0.5)", padding: 40 }}>No options configured</div>}
+                  </div>
+                  <div style={{ marginTop: 12, fontSize: 14, opacity: 0.5 }}>{responses.length} response{responses.length !== 1 ? "s" : ""}</div>
+                </div>
+              );
+            })() : null}
+
+            {presentationSlide.type === "grid-2x2" ? (() => {
+              const responses = liveResults[presentationSlide.id]?.responses ?? [];
+              const dots: Array<{x: number; y: number}> = [];
+              responses.forEach((r) => { try { const p = JSON.parse(r); if (p && typeof p.x === "number") dots.push({x: p.x, y: p.y}); } catch {} });
+              const xLabel = presentationSlide.gridXLabel ?? "X Axis";
+              const yLabel = presentationSlide.gridYLabel ?? "Y Axis";
+              return (
+                <div className={`presentation-grid${responsesHidden ? " is-hidden" : ""}`} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 48, width: "100%" }}>
+                  <h1 style={{ fontSize: "clamp(24px,4vw,44px)", marginBottom: 8 }}>{presentationSlide.title}</h1>
+                  <div style={{ position: "relative", width: "min(500px, 80vw)", height: "min(500px, 60vh)", border: "2px solid rgba(255,255,255,0.2)", borderRadius: 8, background: "rgba(255,255,255,0.03)" }}>
+                    <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1, background: "rgba(255,255,255,0.15)" }} />
+                    <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 1, background: "rgba(255,255,255,0.15)" }} />
+                    <span style={{ position: "absolute", bottom: -28, left: "50%", transform: "translateX(-50%)", fontSize: 13, opacity: 0.6 }}>{xLabel} →</span>
+                    <span style={{ position: "absolute", left: -8, top: "50%", transform: "translateY(-50%) rotate(-90deg)", fontSize: 13, opacity: 0.6 }}>↑ {yLabel}</span>
+                    {dots.map((d, i) => (
+                      <div key={i} style={{ position: "absolute", left: `${d.x * 50}%`, top: `${d.y * 50}%`, width: 14, height: 14, borderRadius: "50%", background: "#6b5cff", border: "2px solid #fff", transform: "translate(-50%, -50%)", transition: "all 300ms ease" }} />
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 20, fontSize: 14, opacity: 0.5 }}>{dots.length} response{dots.length !== 1 ? "s" : ""}</div>
+                </div>
+              );
+            })() : null}
+
+            {presentationSlide.type === "pin-image" ? (() => {
+              const responses = liveResults[presentationSlide.id]?.responses ?? [];
+              const pins: Array<{x: number; y: number}> = [];
+              responses.forEach((r) => { try { const p = JSON.parse(r); if (p && typeof p.x === "number") pins.push({x: p.x, y: p.y}); } catch {} });
+              return (
+                <div className={`presentation-pin${responsesHidden ? " is-hidden" : ""}`} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 48, width: "100%" }}>
+                  <h1 style={{ fontSize: "clamp(24px,4vw,44px)", marginBottom: 12 }}>{presentationSlide.title}</h1>
+                  <div style={{ position: "relative", width: "min(600px, 80vw)", height: "min(400px, 55vh)", borderRadius: 12, overflow: "hidden", background: "rgba(255,255,255,0.05)", border: "2px solid rgba(255,255,255,0.1)" }}>
+                    {presentationSlide.imageUrl ? <img src={presentationSlide.imageUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.3)", fontSize: 18 }}>Image area</div>}
+                    {pins.map((p, i) => (
+                      <div key={i} style={{ position: "absolute", left: `${p.x}%`, top: `${p.y}%`, transform: "translate(-50%, -100%)" }}>
+                        <svg width="24" height="32" viewBox="0 0 24 32"><path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 20 12 20s12-11 12-20C24 5.4 18.6 0 12 0z" fill="#ef4444"/><circle cx="12" cy="12" r="5" fill="#fff"/></svg>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 14, opacity: 0.5 }}>{pins.length} pin{pins.length !== 1 ? "s" : ""} placed</div>
+                </div>
+              );
+            })() : null}
+
+            {presentationSlide.type === "select-answer" ? (() => {
+              const counts = liveResults[presentationSlide.id]?.counts ?? [];
+              const labels = presentationSlide.choices ?? [];
+              const total = counts.reduce((s, v) => s + v, 0) || 1;
+              const correctIdx = presentationSlide.correctAnswerIndex;
+              return (
+                <div className={`presentation-quiz${responsesHidden ? " is-hidden" : ""}`} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 48, width: "100%" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}><span style={{ fontSize: 14, color: "#fbbf24", fontWeight: 700, background: "rgba(251,191,36,0.15)", padding: "4px 14px", borderRadius: 20 }}>⚡ {presentationSlide.quizPoints ?? 1000} points</span></div>
+                  <h1 style={{ fontSize: "clamp(24px,4vw,44px)", marginBottom: 8 }}>{presentationSlide.title}</h1>
+                  <div style={{ width: "100%", maxWidth: 700, display: "flex", flexDirection: "column", gap: 10 }}>
+                    {labels.map((label, i) => {
+                      const pct = Math.round((counts[i] ?? 0) / total * 100);
+                      const isCorrect = correctIdx === i;
+                      return (
+                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", background: isCorrect ? "rgba(52,211,153,0.15)" : "rgba(255,255,255,0.06)", borderRadius: 14, border: isCorrect ? "2px solid #34d399" : "2px solid rgba(255,255,255,0.08)", position: "relative", overflow: "hidden" }}>
+                          <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct}%`, background: isCorrect ? "rgba(52,211,153,0.12)" : "rgba(107,92,255,0.12)", transition: "width 500ms ease" }} />
+                          <span style={{ position: "relative", width: 30, height: 30, borderRadius: "50%", background: isCorrect ? "#34d399" : "rgba(255,255,255,0.15)", color: isCorrect ? "#111" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14, flexShrink: 0 }}>{String.fromCharCode(65 + i)}</span>
+                          <span style={{ position: "relative", flex: 1, fontSize: 17, fontWeight: 600 }}>{label}</span>
+                          <span style={{ position: "relative", fontSize: 15, fontWeight: 700, opacity: 0.8 }}>{counts[i] ?? 0}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })() : null}
+
+            {presentationSlide.type === "type-answer" ? (() => {
+              const responses = liveResults[presentationSlide.id]?.responses ?? [];
+              const correct = presentationSlide.correctAnswers ?? [];
+              return (
+                <div className={`presentation-typequiz${responsesHidden ? " is-hidden" : ""}`} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 48, width: "100%" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}><span style={{ fontSize: 14, color: "#fbbf24", fontWeight: 700, background: "rgba(251,191,36,0.15)", padding: "4px 14px", borderRadius: 20 }}>⚡ {presentationSlide.quizPoints ?? 1000} points</span></div>
+                  <h1 style={{ fontSize: "clamp(24px,4vw,44px)", marginBottom: 8 }}>{presentationSlide.title}</h1>
+                  {correct.length > 0 && <div style={{ fontSize: 16, color: "#34d399", fontWeight: 600, background: "rgba(52,211,153,0.12)", padding: "8px 20px", borderRadius: 12, border: "1px solid rgba(52,211,153,0.3)" }}>✓ Correct: {correct.join(", ")}</div>}
+                  <div style={{ width: "100%", maxWidth: 600, display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "center", marginTop: 16 }}>
+                    {responses.map((r, i) => {
+                      const isRight = correct.some((c) => c.toLowerCase().trim() === r.toLowerCase().trim());
+                      return (
+                        <div key={i} style={{ padding: "10px 18px", borderRadius: 12, background: isRight ? "rgba(52,211,153,0.15)" : "rgba(255,255,255,0.06)", border: `1px solid ${isRight ? "rgba(52,211,153,0.4)" : "rgba(255,255,255,0.1)"}`, fontSize: 15 }}>{r}</div>
+                      );
+                    })}
+                    {responses.length === 0 && <div style={{ color: "rgba(255,255,255,0.5)", padding: 40 }}>Waiting for answers...</div>}
+                  </div>
+                  <div style={{ marginTop: 12, fontSize: 14, opacity: 0.5 }}>{responses.length} answer{responses.length !== 1 ? "s" : ""}</div>
+                </div>
+              );
+            })() : null}
+
+            {presentationSlide.type === "image-choice" ? (() => {
+              const responses = liveResults[presentationSlide.id]?.responses ?? [];
+              const imgOpts = presentationSlide.imageOptions ?? [];
+              const labels = presentationSlide.choices ?? [];
+              const voteCounts: Record<string, number> = {};
+              (imgOpts.length > 0 ? imgOpts : labels).forEach((o, i) => { voteCounts[typeof o === "string" ? String(i) : o.id] = 0; });
+              responses.forEach((r) => { if (voteCounts[r] !== undefined) voteCounts[r]++; });
+              const total = Math.max(1, Object.values(voteCounts).reduce((a, b) => a + b, 0));
+              const colors = ["#6b5cff", "#f472b6", "#34d399", "#fbbf24", "#60a5fa"];
+              return (
+                <div className={`presentation-imgchoice${responsesHidden ? " is-hidden" : ""}`} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 48, width: "100%" }}>
+                  <h1 style={{ fontSize: "clamp(24px,4vw,44px)", marginBottom: 12 }}>{presentationSlide.title}</h1>
+                  <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(imgOpts.length || labels.length || 2, 4)}, 1fr)`, gap: 16, maxWidth: 800, width: "100%" }}>
+                    {(imgOpts.length > 0 ? imgOpts : labels.map((l, i) => ({id: String(i), url: "", label: l}))).map((opt, i) => {
+                      const c = voteCounts[opt.id] ?? 0;
+                      return (
+                        <div key={opt.id} style={{ borderRadius: 14, overflow: "hidden", border: "2px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)" }}>
+                          <div style={{ width: "100%", paddingBottom: "70%", background: opt.url ? `url(${opt.url}) center/cover` : "rgba(255,255,255,0.08)", position: "relative" }}>
+                            <span style={{ position: "absolute", top: 8, right: 8, background: colors[i % colors.length], color: "#fff", borderRadius: 20, padding: "2px 12px", fontSize: 14, fontWeight: 700 }}>{c}</span>
+                          </div>
+                          <div style={{ padding: "10px 14px" }}><div style={{ fontSize: 14, fontWeight: 600 }}>{opt.label}</div><div style={{ fontSize: 12, opacity: 0.6 }}>{Math.round(c / total * 100)}%</div></div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })() : null}
+
+            {presentationSlide.type === "reactions" ? (() => {
+              const responses = liveResults[presentationSlide.id]?.responses ?? [];
+              const emojiCounts: Record<string, number> = {};
+              responses.forEach((r) => { try { const p = JSON.parse(r); if (p?.emoji) emojiCounts[p.emoji] = (emojiCounts[p.emoji] || 0) + 1; } catch { if (r.length <= 4) emojiCounts[r] = (emojiCounts[r] || 0) + 1; } });
+              const sorted = Object.entries(emojiCounts).sort((a, b) => b[1] - a[1]);
+              return (
+                <div className={`presentation-reactions${responsesHidden ? " is-hidden" : ""}`} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 24, padding: 48, width: "100%" }}>
+                  <h1 style={{ fontSize: "clamp(24px,4vw,44px)", marginBottom: 8 }}>{presentationSlide.title}</h1>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 24, justifyContent: "center" }}>
+                    {sorted.length === 0 ? (
+                      <div style={{ color: "rgba(255,255,255,0.5)", padding: 40, textAlign: "center" }}>
+                        <div style={{ fontSize: 64, marginBottom: 12 }}>🎉</div>
+                        <div style={{ fontSize: 18 }}>Waiting for reactions...</div>
+                      </div>
+                    ) : sorted.map(([emoji, count]) => (
+                      <div key={emoji} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 64 }}>{emoji}</span>
+                        <span style={{ fontSize: 24, fontWeight: 700, color: "#6b5cff" }}>{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })() : null}
+
+            {presentationSlide.type === "quick-form" ? (() => {
+              const responses = liveResults[presentationSlide.id]?.responses ?? [];
+              const fields = presentationSlide.formFields ?? [];
+              return (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20, padding: 48, width: "100%" }}>
+                  <h1 style={{ fontSize: "clamp(24px,4vw,44px)", marginBottom: 8 }}>{presentationSlide.title}</h1>
+                  <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "20px 32px", background: "rgba(255,255,255,0.06)", borderRadius: 20, border: "1px solid rgba(255,255,255,0.1)" }}>
+                    <span style={{ fontSize: 48 }}>📝</span>
+                    <div><span style={{ fontSize: 42, fontWeight: 700 }}>{responses.length}</span><div style={{ fontSize: 16, opacity: 0.6 }}>submission{responses.length !== 1 ? "s" : ""}</div></div>
+                  </div>
+                  {fields.length > 0 && <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>{fields.map((f) => <span key={f.id} style={{ padding: "6px 16px", borderRadius: 20, background: "rgba(255,255,255,0.08)", fontSize: 14 }}>{f.label}</span>)}</div>}
+                </div>
+              );
+            })() : null}
+
+            {presentationSlide.type === "comments" ? (() => {
+              const responses = liveResults[presentationSlide.id]?.responses ?? [];
+              return (
+                <div className={`presentation-comments${responsesHidden ? " is-hidden" : ""}`} style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: 48, width: "100%" }}>
+                  <h1 style={{ fontSize: "clamp(24px,4vw,44px)", marginBottom: 20 }}>{presentationSlide.title}</h1>
+                  <div style={{ width: "100%", maxWidth: 650, display: "flex", flexDirection: "column", gap: 10, maxHeight: 500, overflowY: "auto" }}>
+                    {responses.length === 0 ? (
+                      <div style={{ textAlign: "center", color: "rgba(255,255,255,0.5)", padding: 48 }}>
+                        <div style={{ fontSize: 48, marginBottom: 12 }}>💬</div>
+                        <div style={{ fontSize: 18 }}>No comments yet</div>
+                      </div>
+                    ) : responses.map((msg, i) => (
+                      <div key={i} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                        <div style={{ width: 36, height: 36, borderRadius: "50%", background: ["#6b5cff","#f472b6","#34d399","#fbbf24","#60a5fa"][i % 5], display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14, flexShrink: 0 }}>👤</div>
+                        <div style={{ padding: "12px 18px", background: "rgba(255,255,255,0.08)", borderRadius: "0 16px 16px 16px", fontSize: 16, lineHeight: 1.5, maxWidth: "85%", wordBreak: "break-word" }}>{msg}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })() : null}
+
+            {presentationSlide.type === "gather-names" ? (() => {
+              const responses = liveResults[presentationSlide.id]?.responses ?? [];
+              const colors = ["#6b5cff", "#f472b6", "#34d399", "#fbbf24", "#60a5fa", "#a78bfa", "#fb923c"];
+              return (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20, padding: 48, width: "100%" }}>
+                  <h1 style={{ fontSize: "clamp(24px,4vw,44px)", marginBottom: 4 }}>{presentationSlide.title}</h1>
+                  <div style={{ fontSize: 16, opacity: 0.6, marginBottom: 16 }}>{responses.length} participant{responses.length !== 1 ? "s" : ""} joined</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "center", maxWidth: 800 }}>
+                    {responses.length === 0 ? (
+                      <div style={{ color: "rgba(255,255,255,0.5)", padding: 40 }}>Waiting for participants to join...</div>
+                    ) : responses.map((name, i) => (
+                      <span key={i} style={{ padding: "10px 22px", borderRadius: 24, background: `${colors[i % colors.length]}20`, border: `1px solid ${colors[i % colors.length]}60`, fontSize: 16, fontWeight: 600 }}>{name}</span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })() : null}
+
+            {presentationSlide.type === "leaderboard" ? (() => {
+              const responses = liveResults[presentationSlide.id]?.responses ?? [];
+              const medals = ["#FFD700", "#C0C0C0", "#CD7F32"];
+              return (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20, padding: 48, width: "100%" }}>
+                  <div style={{ fontSize: 56, marginBottom: 8 }}>🏆</div>
+                  <h1 style={{ fontSize: "clamp(24px,4vw,44px)", marginBottom: 12 }}>{presentationSlide.title}</h1>
+                  <div style={{ width: "100%", maxWidth: 600, display: "flex", flexDirection: "column", gap: 8 }}>
+                    {responses.length === 0 ? (
+                      <div style={{ textAlign: "center", color: "rgba(255,255,255,0.5)", padding: 40 }}>No scores yet</div>
+                    ) : responses.slice(0, 10).map((name, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px", background: i < 3 ? `${medals[i]}15` : "rgba(255,255,255,0.04)", borderRadius: 12 }}>
+                        <span style={{ width: 34, height: 34, borderRadius: "50%", background: i < 3 ? medals[i] : "rgba(255,255,255,0.15)", color: i < 3 ? "#111" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 16, flexShrink: 0 }}>{i + 1}</span>
+                        <span style={{ flex: 1, fontSize: 18, fontWeight: i < 3 ? 700 : 500 }}>{name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })() : null}
+
+            {presentationSlide.type === "timer" ? (() => {
+              const dur = presentationSlide.timerDuration ?? 60;
+              return (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 24, padding: 48, width: "100%" }}>
+                  <h1 style={{ fontSize: "clamp(24px,4vw,44px)", marginBottom: 8 }}>{presentationSlide.title}</h1>
+                  <div style={{ fontSize: 96, fontWeight: 700, fontVariantNumeric: "tabular-nums", letterSpacing: "0.05em" }}>
+                    {Math.floor(dur / 60)}:{(dur % 60).toString().padStart(2, "0")}
+                  </div>
+                  <div style={{ width: "min(400px, 70vw)", height: 10, borderRadius: 5, background: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
+                    <div style={{ width: "100%", height: "100%", borderRadius: 5, background: "#3b82f6" }} />
+                  </div>
+                  <p style={{ fontSize: 16, opacity: 0.5 }}>Timer will count down on participant devices</p>
+                </div>
+              );
+            })() : null}
+
+            {presentationSlide.type === "instructions" ? (() => {
+              const steps = presentationSlide.instructionSteps ?? ["Go to inzphire.com", "Enter the code shown on screen"];
+              return (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20, padding: 48, width: "100%" }}>
+                  <h1 style={{ fontSize: "clamp(24px,4vw,44px)", marginBottom: 12 }}>{presentationSlide.title}</h1>
+                  <div style={{ width: "100%", maxWidth: 600, display: "flex", flexDirection: "column", gap: 16 }}>
+                    {steps.map((step, i) => (
+                      <div key={i} style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                        <span style={{ width: 40, height: 40, borderRadius: "50%", background: "#6b5cff", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 18, flexShrink: 0 }}>{i + 1}</span>
+                        <span style={{ fontSize: 20, lineHeight: 1.5 }}>{step}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })() : null}
+
+            {presentationSlide.type === "content" ? (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 48, width: "100%", textAlign: "center" }}>
+                <h1 style={{ fontSize: "clamp(28px,5vw,56px)", marginBottom: 8 }}>{presentationSlide.title}</h1>
+                {presentationSlide.objective ? <p style={{ fontSize: 20, opacity: 0.7, margin: 0, maxWidth: 700, lineHeight: 1.6 }}>{presentationSlide.objective}</p> : null}
+                {presentationSlide.contentHtml ? <div style={{ marginTop: 20, fontSize: 18, lineHeight: 1.7, maxWidth: 700 }} dangerouslySetInnerHTML={{ __html: presentationSlide.contentHtml }} /> : null}
+              </div>
             ) : null}
           </div>
 

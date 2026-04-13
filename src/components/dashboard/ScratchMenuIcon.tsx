@@ -17,7 +17,16 @@ type ScratchMenuIconName =
   | "text"
   | "image"
   | "video"
-  | "instructions";
+  | "instructions"
+  | "image-choice"
+  | "reactions"
+  | "comments"
+  | "gather-names"
+  | "timer"
+  | "leaderboard"
+  | "content"
+  | "hundred-points"
+  | "two-by-two";
 
 interface ScratchMenuIconProps {
   name: ScratchMenuIconName;
@@ -185,6 +194,84 @@ export default function ScratchMenuIcon({
           <rect x="14" y="4" width="6" height="6" rx="1.2" />
           <rect x="4" y="14" width="6" height="6" rx="1.2" />
           <rect x="14" y="14" width="6" height="6" rx="1.2" />
+        </svg>
+      );
+    case "image-choice":
+      return (
+        <svg {...baseProps} className={className} width={size} height={size} style={style}>
+          <rect x="3" y="3" width="8" height="8" rx="1.5" />
+          <rect x="13" y="3" width="8" height="8" rx="1.5" />
+          <circle cx="7" cy="7" r="1.5" />
+          <circle cx="17" cy="7" r="1.5" />
+        </svg>
+      );
+    case "reactions":
+      return (
+        <svg {...baseProps} className={className} width={size} height={size} style={style}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+          <circle cx="9" cy="10" r="0.8" fill="currentColor" stroke="none" />
+          <circle cx="15" cy="10" r="0.8" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "comments":
+      return (
+        <svg {...baseProps} className={className} width={size} height={size} style={style}>
+          <path d="M6 6h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H11l-4 3v-3H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" />
+          <path d="M8 10h8" />
+          <path d="M8 13h5" />
+        </svg>
+      );
+    case "gather-names":
+      return (
+        <svg {...baseProps} className={className} width={size} height={size} style={style}>
+          <circle cx="9" cy="7" r="3" />
+          <path d="M3 19a6 6 0 0 1 12 0" />
+          <path d="M15 5l3 3 5-5" />
+        </svg>
+      );
+    case "timer":
+      return (
+        <svg {...baseProps} className={className} width={size} height={size} style={style}>
+          <circle cx="12" cy="13" r="8" />
+          <path d="M12 9v4l2.5 2.5" />
+          <path d="M10 2h4" />
+        </svg>
+      );
+    case "leaderboard":
+      return (
+        <svg {...baseProps} className={className} width={size} height={size} style={style}>
+          <path d="M8 21V11H4v10" />
+          <path d="M14 21V7h-4v14" />
+          <path d="M20 21v-8h-4v8" />
+        </svg>
+      );
+    case "content":
+      return (
+        <svg {...baseProps} className={className} width={size} height={size} style={style}>
+          <rect x="4" y="4" width="16" height="16" rx="2" />
+          <path d="M8 8h8" />
+          <path d="M8 12h6" />
+          <path d="M8 16h4" />
+        </svg>
+      );
+    case "hundred-points":
+      return (
+        <svg {...baseProps} className={className} width={size} height={size} style={style}>
+          <path d="M8 5h8v4a4 4 0 0 1-8 0V5Z" />
+          <path d="M6 7H4a3.5 3.5 0 0 0 3.5 3.5" />
+          <path d="M18 7h2a3.5 3.5 0 0 1-3.5 3.5" />
+          <path d="M12 13v3" />
+          <path d="M9 19h6" />
+        </svg>
+      );
+    case "two-by-two":
+      return (
+        <svg {...baseProps} className={className} width={size} height={size} style={style}>
+          <rect x="4" y="4" width="7" height="7" rx="1.2" />
+          <rect x="13" y="4" width="7" height="7" rx="1.2" />
+          <rect x="4" y="13" width="7" height="7" rx="1.2" />
+          <rect x="13" y="13" width="7" height="7" rx="1.2" />
         </svg>
       );
     default:

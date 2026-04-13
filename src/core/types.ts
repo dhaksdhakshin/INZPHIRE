@@ -32,6 +32,175 @@ export type IconName =
   | "plus"
   | "bell";
 
+export type SlideType =
+  | "word_cloud"
+  | "multiple_choice"
+  | "open_ended"
+  | "scales"
+  | "ranking"
+  | "hundred_points"
+  | "two_by_two"
+  | "pin_on_image"
+  | "qa"
+  | "timer"
+  | "instructions"
+  | "content"
+  | "image_choice"
+  | "select_answer_quiz"
+  | "type_answer_quiz"
+  | "leaderboard"
+  | "reactions"
+  | "quick_form"
+  | "comments"
+  | "gather_names";
+
+export const ALL_SLIDE_TYPES: SlideType[] = [
+  "word_cloud",
+  "multiple_choice",
+  "open_ended",
+  "scales",
+  "ranking",
+  "hundred_points",
+  "two_by_two",
+  "pin_on_image",
+  "qa",
+  "timer",
+  "instructions",
+  "content",
+  "image_choice",
+  "select_answer_quiz",
+  "type_answer_quiz",
+  "leaderboard",
+  "reactions",
+  "quick_form",
+  "comments",
+  "gather_names",
+];
+
+export const SLIDE_TYPE_LABELS: Record<SlideType, string> = {
+  word_cloud: "Word Cloud",
+  multiple_choice: "Multiple Choice",
+  open_ended: "Open Ended",
+  scales: "Scales",
+  ranking: "Ranking",
+  hundred_points: "100 Points",
+  two_by_two: "2x2 Grid",
+  pin_on_image: "Pin on Image",
+  qa: "Q&A",
+  timer: "Timer",
+  instructions: "Instructions",
+  content: "Content Slide",
+  image_choice: "Image Choice",
+  select_answer_quiz: "Select Answer Quiz",
+  type_answer_quiz: "Type Answer Quiz",
+  leaderboard: "Leaderboard",
+  reactions: "Reactions",
+  quick_form: "Quick Form",
+  comments: "Comments",
+  gather_names: "Gather Names",
+};
+
+export const SLIDE_TYPE_CATEGORY: Record<SlideType, "question" | "quiz" | "interaction" | "content"> = {
+  word_cloud: "question",
+  multiple_choice: "question",
+  open_ended: "question",
+  scales: "question",
+  ranking: "question",
+  hundred_points: "question",
+  two_by_two: "question",
+  pin_on_image: "question",
+  qa: "interaction",
+  timer: "interaction",
+  instructions: "content",
+  content: "content",
+  image_choice: "question",
+  select_answer_quiz: "quiz",
+  type_answer_quiz: "quiz",
+  leaderboard: "quiz",
+  reactions: "interaction",
+  quick_form: "interaction",
+  comments: "interaction",
+  gather_names: "interaction",
+};
+
+export interface SlideData {
+  id: string;
+  type: SlideType;
+  title: string;
+  subtitle?: string;
+  options?: string[];
+  imageUrl?: string;
+  imageOptions?: Array<{ id: string; url: string; label: string }>;
+  scaleMin?: number;
+  scaleMax?: number;
+  scaleMinLabel?: string;
+  scaleMaxLabel?: string;
+  gridXLabel?: string;
+  gridYLabel?: string;
+  timerDuration?: number;
+  quizPoints?: number;
+  quizTimerSeconds?: number;
+  correctAnswers?: string[];
+  correctAnswerIndex?: number;
+  formFields?: Array<{ id: string; label: string; type: "email" | "text" | "phone" }>;
+  contentHtml?: string;
+  instructionSteps?: string[];
+  reactions?: string[];
+  maxResponseLength?: number;
+  maxResponses?: number;
+  orderIndex: number;
+  skipped?: boolean;
+  showResults?: boolean;
+}
+
+export interface ResponseData {
+  slideId: string;
+  sessionId: string;
+  participantId: string;
+  participantName?: string;
+  data: ResponsePayload;
+  createdAt: string;
+}
+
+export type ResponsePayload =
+  | { type: "text"; value: string }
+  | { type: "choice"; index: number }
+  | { type: "scale"; value: number }
+  | { type: "ranking"; order: number[] }
+  | { type: "points"; values: Record<string, number> }
+  | { type: "grid"; x: number; y: number; itemId?: string }
+  | { type: "pin"; x: number; y: number }
+  | { type: "qa"; question: string }
+  | { type: "image_choice"; imageId: string }
+  | { type: "quiz_answer"; answer: string; index?: number }
+  | { type: "reaction"; emoji: string }
+  | { type: "comment"; message: string }
+  | { type: "form"; fields: Record<string, string> }
+  | { type: "name"; name: string };
+
+export interface LeaderboardEntry {
+  participantId: string;
+  participantName: string;
+  totalScore: number;
+  correctCount: number;
+}
+
+export interface QaQuestion {
+  id: string;
+  text: string;
+  likes: number;
+  isAnswered: boolean;
+  participantId: string;
+  createdAt: string;
+}
+
+export interface CommentMessage {
+  id: string;
+  participantId: string;
+  message: string;
+  createdAt: string;
+}
+
 export interface NavItem {
   id: RouteId;
   label: string;

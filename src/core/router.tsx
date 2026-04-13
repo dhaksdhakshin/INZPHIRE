@@ -24,10 +24,10 @@ export const router = createBrowserRouter([
     path: "/join",
     element: <ParticipantPage />,
   },
-  {
-    path: "/join/:code",
-    element: <ParticipantPage />,
-  },
+    {
+      path: "/join/:code",
+      element: <ParticipantPage />,
+    },
   {
     path: "/app",
     element: <AppShell />,
