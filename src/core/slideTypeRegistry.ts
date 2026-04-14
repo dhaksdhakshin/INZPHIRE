@@ -289,6 +289,22 @@ export const SLIDE_TYPE_CONFIGS: Record<SlideType, SlideTypeConfig> = {
     defaultOptions: () => [],
     defaultContent: () => ({}),
   },
+  guess_number: {
+    type: "guess_number",
+    label: SLIDE_TYPE_LABELS.guess_number,
+    category: SLIDE_TYPE_CATEGORY.guess_number,
+    icon: "Hash",
+    color: "#F97316",
+    hasOptions: false,
+    hasTimer: false,
+    hasPoints: false,
+    defaultOptions: () => [],
+    defaultContent: () => ({
+      correctNumber: 7,
+      guessMin: 0,
+      guessMax: 100,
+    }),
+  },
 };
 
 export const SLIDE_TYPES_BY_CATEGORY = {

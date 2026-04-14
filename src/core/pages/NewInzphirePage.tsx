@@ -98,7 +98,7 @@ const templateFilters = [
 
 const QR_GRID_SIZE = 21;
 const DEFAULT_MULTIPLE_CHOICE_OPTIONS = ["Option 1", "Option 2", "Option 3", "Option 4"];
-type PresentationSlideType = "title" | "word-cloud" | "scale" | "pie" | "text" | "multiple-choice" | "ranking" | "qna" | "hundred-points" | "grid-2x2" | "pin-image" | "select-answer" | "type-answer" | "image-choice" | "reactions" | "quick-form" | "comments" | "gather-names" | "leaderboard" | "timer" | "instructions" | "content";
+type PresentationSlideType = "title" | "word-cloud" | "scale" | "pie" | "text" | "multiple-choice" | "ranking" | "qna" | "hundred-points" | "grid-2x2" | "pin-image" | "select-answer" | "type-answer" | "image-choice" | "reactions" | "quick-form" | "comments" | "gather-names" | "leaderboard" | "timer" | "instructions" | "content" | "guess-number";
 type QuestionTypeKey = keyof typeof QUESTION_TYPE_TO_PRESENTATION_TYPE;
 type SlideDeckItem = {
   id: string;
@@ -131,6 +131,9 @@ type SlideDeckItem = {
   reactions?: string[];
   maxResponseLength?: number;
   maxResponses?: number;
+  correctNumber?: number;
+  guessMin?: number;
+  guessMax?: number;
 };
 
 type ThemePreset = {
@@ -270,7 +273,7 @@ const QUESTION_TYPE_TO_PRESENTATION_TYPE: Record<string, PresentationSlideType> 
   scales: "scale",
   ranking: "ranking",
   qna: "qna",
-  "guess-number": "scale",
+  "guess-number": "guess-number",
   "points-100": "hundred-points",
   "grid-2x2": "grid-2x2",
   "pin-image": "pin-image",
@@ -696,6 +699,11 @@ export default function NewInzphirePage() {
         else if (payload.type === "quiz_answer") {
           if (!result[sid].responses) result[sid].responses = [];
           result[sid].responses!.push(payload.answer);
+        }
+        // Guess number
+        else if (payload.type === "guess_number") {
+          if (!result[sid].responses) result[sid].responses = [];
+          result[sid].responses!.push(String(payload.value));
         }
       }
 
@@ -1226,6 +1234,9 @@ export default function NewInzphirePage() {
         reactions: slide.reactions,
         maxResponseLength: slide.maxResponseLength,
         maxResponses: slide.maxResponses,
+        correctNumber: slide.correctNumber,
+        guessMin: slide.guessMin,
+        guessMax: slide.guessMax,
       })),
       updatedAt: Date.now(),
     };
@@ -1577,6 +1588,41 @@ export default function NewInzphirePage() {
       [items[index], items[target]] = [items[target], items[index]];
       return { ...slide, choices: items };
     });
+  };
+
+  /* ── 100 Points item handlers ── */
+  const handlePointsItemChange = (index: number, value: string) => {
+    updateActiveSlide((slide) => {
+      const items = [...(slide.choices ?? ["Option A", "Option B", "Option C"])];
+      items[index] = value;
+      return { ...slide, choices: items };
+    });
+  };
+
+  const handleAddPointsItem = () => {
+    updateActiveSlide((slide) => {
+      const items = [...(slide.choices ?? [])];
+      items.push(`Option ${items.length + 1}`);
+      return { ...slide, choices: items };
+    });
+  };
+
+  const handleRemovePointsItem = (index: number) => {
+    updateActiveSlide((slide) => {
+      const items = [...(slide.choices ?? [])];
+      if (items.length <= 2) return slide;
+      items.splice(index, 1);
+      return { ...slide, choices: items };
+    });
+  };
+
+  /* ── Guess the Number handlers ── */
+  const handleCorrectNumberChange = (value: number) => {
+    updateActiveSlide((slide) => ({ ...slide, correctNumber: value }));
+  };
+
+  const handleGuessRangeChange = (field: "guessMin" | "guessMax", value: number) => {
+    updateActiveSlide((slide) => ({ ...slide, [field]: value }));
   };
 
   const handleMultipleChoiceVote = (index: number) => {
@@ -2918,6 +2964,11 @@ export default function NewInzphirePage() {
                 }
 
                 if (selectedQuestionType === "guess-number") {
+                  const gnCorrect = activeDeckSlide?.correctNumber ?? 7;
+                  const gnMin = activeDeckSlide?.guessMin ?? 0;
+                  const gnMax = activeDeckSlide?.guessMax ?? 100;
+                  const gnRange = gnMax - gnMin || 1;
+                  const gnPct = ((gnCorrect - gnMin) / gnRange) * 100;
                   return (
                     <article className="editor-generated-slide">{joinBarEl}{brandEl}
                       <div className="editor-wordcloud__question" onClick={() => { setInspectorTab("slide"); setWordCloudInspectorView("question"); }}>
@@ -2933,15 +2984,15 @@ export default function NewInzphirePage() {
                         {/* Number indicator */}
                         <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 14px", borderRadius: 12, background: "#e8e7ef", margin: "-20px 0 12px" }}>
                           <span style={{ width: 20, height: 20, borderRadius: "50%", background: "#c8f3d2", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700 }}>✓</span>
-                          <strong style={{ fontSize: 18 }}>7</strong>
+                          <strong style={{ fontSize: 18 }}>{gnCorrect}</strong>
                         </div>
                         {/* Scale line */}
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 4px" }}>
-                          <span style={{ fontSize: 13, color: "#7b7b78" }}>0</span>
+                          <span style={{ fontSize: 13, color: "#7b7b78" }}>{gnMin}</span>
                           <div style={{ flex: 1, height: 2, margin: "0 12px", background: "#e5e5e1", position: "relative" }}>
-                            <div style={{ position: "absolute", left: "70%", top: "50%", transform: "translate(-50%, -50%)", width: 0, height: 0, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: "8px solid #6366f1" }} />
+                            <div style={{ position: "absolute", left: `${Math.max(2, Math.min(98, gnPct))}%`, top: "50%", transform: "translate(-50%, -50%)", width: 0, height: 0, borderLeft: "6px solid transparent", borderRight: "6px solid transparent", borderBottom: "8px solid #6366f1" }} />
                           </div>
-                          <span style={{ fontSize: 13, color: "#7b7b78" }}>10</span>
+                          <span style={{ fontSize: 13, color: "#7b7b78" }}>{gnMax}</span>
                         </div>
                       </div>
                       {footerEl}{qrOverlay}
@@ -3815,6 +3866,139 @@ export default function NewInzphirePage() {
               ) : null}
             </div>
 
+            {/* ── Ranking Inspector ── */}
+            {selectedQuestionType === "ranking" ? (
+              <div className="editor-inspector__section">
+                <span className="editor-inspector__label">Items to rank</span>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {(activeDeckSlide?.choices ?? ["Item 1", "Item 2", "Item 3", "Item 4"]).map((item, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ width: 20, fontSize: 12, fontWeight: 700, color: "#6366f1", textAlign: "center" }}>{i + 1}</span>
+                      <input
+                        className="editor-inspector__input"
+                        value={item}
+                        onChange={(e) => handleRankingItemChange(i, e.target.value)}
+                        placeholder={`Item ${i + 1}`}
+                        style={{ flex: 1 }}
+                      />
+                      <button type="button" onClick={() => handleReorderRankingItem(i, -1)} disabled={i === 0} style={{ width: 22, height: 22, border: "1px solid #e5e5e1", borderRadius: 4, background: "#fff", cursor: i === 0 ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#666", opacity: i === 0 ? 0.3 : 1 }}>↑</button>
+                      <button type="button" onClick={() => handleReorderRankingItem(i, 1)} disabled={i === (activeDeckSlide?.choices?.length ?? 4) - 1} style={{ width: 22, height: 22, border: "1px solid #e5e5e1", borderRadius: 4, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#666", opacity: i === (activeDeckSlide?.choices?.length ?? 4) - 1 ? 0.3 : 1 }}>↓</button>
+                      {(activeDeckSlide?.choices?.length ?? 4) > 2 && (
+                        <button type="button" onClick={() => handleRemoveRankingItem(i)} style={{ width: 22, height: 22, border: "1px solid #e5e5e1", borderRadius: 4, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#c44949" }}>✕</button>
+                      )}
+                    </div>
+                  ))}
+                  <button type="button" onClick={handleAddRankingItem} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "1px dashed #d1d5db", borderRadius: 8, padding: "8px 12px", cursor: "pointer", fontSize: 13, color: "#6366f1", fontWeight: 600, width: "100%", justifyContent: "center" }}>
+                    <Plus size={14} /> Add item
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {/* ── Q&A Inspector ── */}
+            {selectedQuestionType === "qna" ? (
+              <div className="editor-inspector__section">
+                <span className="editor-inspector__label">Q&A Settings</span>
+                <div className="editor-toggle">
+                  <span>Allow upvoting</span>
+                  <button type="button" className="editor-toggle__switch is-on" onClick={() => pushToast("Upvoting enabled by default", "default")}>
+                    <span />
+                  </button>
+                </div>
+                <div className="editor-toggle">
+                  <span>Audience can see questions</span>
+                  <button type="button" className="editor-toggle__switch is-on" onClick={() => pushToast("Audience visibility toggled", "default")}>
+                    <span />
+                  </button>
+                </div>
+                <div className="editor-toggle">
+                  <span>Moderation</span>
+                  <button type="button" className="editor-toggle__switch" onClick={() => pushToast("Moderation toggled", "default")}>
+                    <span />
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {/* ── Guess the Number Inspector ── */}
+            {selectedQuestionType === "guess-number" ? (
+              <div className="editor-inspector__section">
+                <span className="editor-inspector__label">Answer</span>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div>
+                    <div className="editor-inspector__label-row" style={{ marginBottom: 4 }}>
+                      <span style={{ fontSize: 12, color: "#7b7b78" }}>Correct number</span>
+                    </div>
+                    <div className="editor-inspector__input-wrap">
+                      <input
+                        className="editor-inspector__input"
+                        type="number"
+                        value={activeDeckSlide?.correctNumber ?? 7}
+                        onChange={(e) => handleCorrectNumberChange(Number(e.target.value))}
+                        style={{ width: "100%" }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ marginBottom: 4 }}><span style={{ fontSize: 12, color: "#7b7b78" }}>Minimum</span></div>
+                      <div className="editor-inspector__input-wrap">
+                        <input
+                          className="editor-inspector__input"
+                          type="number"
+                          value={activeDeckSlide?.guessMin ?? 0}
+                          onChange={(e) => handleGuessRangeChange("guessMin", Number(e.target.value))}
+                          style={{ width: "100%" }}
+                        />
+                      </div>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ marginBottom: 4 }}><span style={{ fontSize: 12, color: "#7b7b78" }}>Maximum</span></div>
+                      <div className="editor-inspector__input-wrap">
+                        <input
+                          className="editor-inspector__input"
+                          type="number"
+                          value={activeDeckSlide?.guessMax ?? 100}
+                          onChange={(e) => handleGuessRangeChange("guessMax", Number(e.target.value))}
+                          style={{ width: "100%" }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {/* ── 100 Points Inspector ── */}
+            {(selectedQuestionType === "points-100" || selectedQuestionType === "hundred-points") ? (
+              <div className="editor-inspector__section">
+                <span className="editor-inspector__label">Options</span>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {(activeDeckSlide?.choices ?? ["Option A", "Option B", "Option C"]).map((item, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: ["#6366f1", "#ec4899", "#3b82f6", "#f59e0b", "#10b981"][i % 5], flexShrink: 0 }} />
+                      <input
+                        className="editor-inspector__input"
+                        value={item}
+                        onChange={(e) => handlePointsItemChange(i, e.target.value)}
+                        placeholder={`Option ${i + 1}`}
+                        style={{ flex: 1 }}
+                      />
+                      {(activeDeckSlide?.choices?.length ?? 3) > 2 && (
+                        <button type="button" onClick={() => handleRemovePointsItem(i)} style={{ width: 22, height: 22, border: "1px solid #e5e5e1", borderRadius: 4, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#c44949" }}>✕</button>
+                      )}
+                    </div>
+                  ))}
+                  <button type="button" onClick={handleAddPointsItem} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "1px dashed #d1d5db", borderRadius: 8, padding: "8px 12px", cursor: "pointer", fontSize: 13, color: "#3b82f6", fontWeight: 600, width: "100%", justifyContent: "center" }}>
+                    <Plus size={14} /> Add option
+                  </button>
+                  <div style={{ marginTop: 4 }}>
+                    <span style={{ fontSize: 12, color: "#7b7b78" }}>Total: 100 points to distribute</span>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             <div className="editor-inspector__section">
               <span className="editor-inspector__label">Joining instructions</span>
               <div className="editor-toggle">
@@ -4150,6 +4334,53 @@ export default function NewInzphirePage() {
                     ))}
                   </div>
                   <div style={{ marginTop: 16, fontSize: 14, opacity: 0.5 }}>{responses.length} question{responses.length !== 1 ? "s" : ""}</div>
+                </div>
+              );
+            })() : null}
+
+            {presentationSlide.type === "guess-number" ? (() => {
+              const responses = liveResults[presentationSlide.id]?.responses ?? [];
+              const correctNumber = presentationSlide.correctNumber ?? 7;
+              const guessMin = presentationSlide.guessMin ?? 0;
+              const guessMax = presentationSlide.guessMax ?? 100;
+              const showAnswer = !responsesHidden;
+              const guesses = responses.map((r: string) => parseFloat(r)).filter((n: number) => !isNaN(n));
+              const avg = guesses.length > 0 ? guesses.reduce((a: number, b: number) => a + b, 0) / guesses.length : 0;
+              const exactMatches = guesses.filter((n: number) => n === correctNumber).length;
+              const range = guessMax - guessMin || 1;
+              const bucketCount = Math.min(range, 30);
+              const bucketSize = range / bucketCount;
+              const buckets: { min: number; max: number; count: number }[] = [];
+              for (let i = 0; i < bucketCount; i++) buckets.push({ min: guessMin + i * bucketSize, max: guessMin + (i + 1) * bucketSize, count: 0 });
+              for (const n of guesses) { const clamped = Math.max(guessMin, Math.min(guessMax, n)); const idx = Math.min(Math.floor((clamped - guessMin) / bucketSize), bucketCount - 1); buckets[idx].count++; }
+              const maxBucket = Math.max(1, ...buckets.map((b) => b.count));
+              const barColors = ["#6b5cff", "#f472b6", "#34d399", "#fbbf24", "#60a5fa"];
+              return (
+                <div className={`presentation-guess${responsesHidden ? " is-hidden" : ""}`} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, padding: 48, width: "100%" }}>
+                  <h1 style={{ fontSize: "clamp(24px,4vw,44px)", marginBottom: 8 }}>{presentationSlide.title}</h1>
+                  {presentationSlide.objective ? <p style={{ opacity: 0.6, margin: "0 0 20px", fontSize: 18 }}>{presentationSlide.objective}</p> : null}
+                  <div style={{ display: "flex", gap: 28, marginBottom: 24 }}>
+                    <div style={{ textAlign: "center" }}><div style={{ fontSize: 32, fontWeight: 800, color: "#6b5cff" }}>{guesses.length}</div><div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>guesses</div></div>
+                    <div style={{ textAlign: "center" }}><div style={{ fontSize: 32, fontWeight: 800, color: "#6b5cff" }}>{avg.toFixed(1)}</div><div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>average</div></div>
+                    {showAnswer && guesses.length > 0 && (<>
+                      <div style={{ textAlign: "center" }}><div style={{ fontSize: 32, fontWeight: 800, color: "#10b981" }}>{correctNumber}</div><div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>answer</div></div>
+                      <div style={{ textAlign: "center" }}><div style={{ fontSize: 32, fontWeight: 800, color: "#fbbf24" }}>{exactMatches}</div><div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>correct</div></div>
+                    </>)}
+                  </div>
+                  <div style={{ position: "relative", width: "100%", maxWidth: 700, height: 200, display: "flex", alignItems: "flex-end", gap: 2, marginBottom: 8 }}>
+                    {buckets.map((bucket, i) => {
+                      const height = (bucket.count / maxBucket) * 100;
+                      const isCorrectBucket = correctNumber >= bucket.min && correctNumber < bucket.max;
+                      return (<div key={i} style={{ flex: 1, height: `${Math.max(height, bucket.count > 0 ? 2 : 0)}%`, background: showAnswer && isCorrectBucket ? "#10b981" : barColors[i % barColors.length], borderRadius: "3px 3px 0 0", opacity: 0.8, transition: "height 0.4s ease, background 0.4s ease", position: "relative" }} />);
+                    })}
+                    {showAnswer && guesses.length > 0 && (
+                      <div style={{ position: "absolute", left: `${((correctNumber - guessMin) / range) * 100}%`, top: 0, bottom: 0, width: 3, background: "#10b981", transform: "translateX(-50%)", zIndex: 2, borderRadius: 2 }}>
+                        <div style={{ position: "absolute", top: -28, left: "50%", transform: "translateX(-50%)", background: "#10b981", color: "#fff", borderRadius: 4, padding: "2px 8px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>{correctNumber}</div>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", width: "100%", maxWidth: 700, fontSize: 12, color: "rgba(255,255,255,0.4)" }}><span>{guessMin}</span><span>{guessMax}</span></div>
+                  {guesses.length === 0 && <div style={{ color: "rgba(255,255,255,0.5)", padding: 24, textAlign: "center" }}><div style={{ fontSize: 48, marginBottom: 8 }}>🔢</div><div>Waiting for guesses...</div></div>}
                 </div>
               );
             })() : null}

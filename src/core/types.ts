@@ -52,7 +52,8 @@ export type SlideType =
   | "reactions"
   | "quick_form"
   | "comments"
-  | "gather_names";
+  | "gather_names"
+  | "guess_number";
 
 export const ALL_SLIDE_TYPES: SlideType[] = [
   "word_cloud",
@@ -75,6 +76,7 @@ export const ALL_SLIDE_TYPES: SlideType[] = [
   "quick_form",
   "comments",
   "gather_names",
+  "guess_number",
 ];
 
 export const SLIDE_TYPE_LABELS: Record<SlideType, string> = {
@@ -98,6 +100,7 @@ export const SLIDE_TYPE_LABELS: Record<SlideType, string> = {
   quick_form: "Quick Form",
   comments: "Comments",
   gather_names: "Gather Names",
+  guess_number: "Guess the Number",
 };
 
 export const SLIDE_TYPE_CATEGORY: Record<SlideType, "question" | "quiz" | "interaction" | "content"> = {
@@ -121,6 +124,7 @@ export const SLIDE_TYPE_CATEGORY: Record<SlideType, "question" | "quiz" | "inter
   quick_form: "interaction",
   comments: "interaction",
   gather_names: "interaction",
+  guess_number: "question",
 };
 
 export interface SlideData {
@@ -148,6 +152,9 @@ export interface SlideData {
   reactions?: string[];
   maxResponseLength?: number;
   maxResponses?: number;
+  correctNumber?: number;
+  guessMin?: number;
+  guessMax?: number;
   orderIndex: number;
   skipped?: boolean;
   showResults?: boolean;
@@ -176,7 +183,8 @@ export type ResponsePayload =
   | { type: "reaction"; emoji: string }
   | { type: "comment"; message: string }
   | { type: "form"; fields: Record<string, string> }
-  | { type: "name"; name: string };
+  | { type: "name"; name: string }
+  | { type: "guess_number"; value: number };
 
 export interface LeaderboardEntry {
   participantId: string;

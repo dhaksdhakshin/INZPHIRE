@@ -1227,6 +1227,172 @@ export function GatherNamesRenderer({ slideData, results, theme }: RendererProps
   );
 }
 
+export function GuessNumberRenderer({ slideData, results, theme }: RendererProps) {
+  const responses: any[] = results?.responses ?? [];
+  const correctNumber: number = slideData?.correctNumber ?? 7;
+  const guessMin: number = slideData?.guessMin ?? 0;
+  const guessMax: number = slideData?.guessMax ?? 100;
+  const showAnswer: boolean = slideData?.showResults ?? false;
+
+  const { guesses, histogram, closestGuess, exactMatches } = useMemo(() => {
+    const nums: number[] = [];
+    for (const r of responses) {
+      const payload = r.data ?? r;
+      const val: number = payload.type === "guess_number" ? payload.value : typeof payload === "number" ? payload : 0;
+      nums.push(val);
+    }
+
+    if (nums.length === 0) {
+      return { guesses: nums, histogram: [], closestGuess: null, exactMatches: 0 };
+    }
+
+    const range = guessMax - guessMin || 1;
+    const bucketCount = Math.min(range, 30);
+    const bucketSize = range / bucketCount;
+    const buckets: { min: number; max: number; count: number }[] = [];
+
+    for (let i = 0; i < bucketCount; i++) {
+      buckets.push({
+        min: guessMin + i * bucketSize,
+        max: guessMin + (i + 1) * bucketSize,
+        count: 0,
+      });
+    }
+
+    let exactCount = 0;
+    let closest: number | null = null;
+    let closestDist = Infinity;
+
+    for (const n of nums) {
+      const clamped = Math.max(guessMin, Math.min(guessMax, n));
+      const bucketIdx = Math.min(Math.floor((clamped - guessMin) / bucketSize), bucketCount - 1);
+      buckets[bucketIdx].count++;
+
+      if (n === correctNumber) exactCount++;
+      const dist = Math.abs(n - correctNumber);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = n;
+      }
+    }
+
+    return { guesses: nums, histogram: buckets, closestGuess: closest, exactMatches: exactCount };
+  }, [responses, guessMin, guessMax, correctNumber]);
+
+  const maxBucket = Math.max(...histogram.map((b) => b.count), 1);
+  const accentColor = getThemeColor(0, theme);
+
+  if (responses.length === 0) {
+    return (
+      <div className="r-guess" style={{ padding: 24, color: "#999", textAlign: "center" }}>
+        <Hash size={40} style={{ margin: "0 auto 12px", opacity: 0.3 }} />
+        Waiting for guesses...
+      </div>
+    );
+  }
+
+  const avg = guesses.length > 0 ? guesses.reduce((a, b) => a + b, 0) / guesses.length : 0;
+
+  return (
+    <div className="r-guess" style={{ width: "100%", padding: 16 }}>
+      {/* Stats bar */}
+      <div style={{ display: "flex", gap: 24, marginBottom: 20, flexWrap: "wrap" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 28, fontWeight: 800, color: accentColor }}>{guesses.length}</div>
+          <div style={{ fontSize: 12, color: "#888" }}>guesses</div>
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 28, fontWeight: 800, color: accentColor }}>{avg.toFixed(1)}</div>
+          <div style={{ fontSize: 12, color: "#888" }}>average</div>
+        </div>
+        {showAnswer && (
+          <>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 28, fontWeight: 800, color: "#10B981" }}>{correctNumber}</div>
+              <div style={{ fontSize: 12, color: "#888" }}>answer</div>
+            </div>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 28, fontWeight: 800, color: "#F59E0B" }}>{exactMatches}</div>
+              <div style={{ fontSize: 12, color: "#888" }}>correct</div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Histogram */}
+      <div style={{ position: "relative", width: "100%", height: 200, display: "flex", alignItems: "flex-end", gap: 2, marginBottom: 8 }}>
+        {histogram.map((bucket, i) => {
+          const height = (bucket.count / maxBucket) * 100;
+          const isCorrectBucket = correctNumber >= bucket.min && correctNumber < bucket.max;
+          return (
+            <div
+              key={i}
+              style={{
+                flex: 1,
+                height: `${height}%`,
+                background: showAnswer && isCorrectBucket ? "#10B981" : accentColor,
+                borderRadius: "3px 3px 0 0",
+                minHeight: bucket.count > 0 ? 4 : 0,
+                opacity: showAnswer && isCorrectBucket ? 1 : 0.7,
+                transition: "height 0.4s ease, background 0.4s ease",
+                position: "relative",
+              }}
+              title={`${Math.round(bucket.min)}-${Math.round(bucket.max)}: ${bucket.count} guesses`}
+            >
+              {bucket.count > 0 && histogram.length <= 20 && (
+                <span style={{ position: "absolute", top: -18, left: "50%", transform: "translateX(-50%)", fontSize: 10, color: "#666", whiteSpace: "nowrap" }}>
+                  {bucket.count}
+                </span>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Correct number indicator line */}
+        {showAnswer && (
+          <div
+            style={{
+              position: "absolute",
+              left: `${((correctNumber - guessMin) / (guessMax - guessMin)) * 100}%`,
+              top: 0,
+              bottom: 0,
+              width: 3,
+              background: "#10B981",
+              transform: "translateX(-50%)",
+              zIndex: 2,
+              borderRadius: 2,
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                top: -24,
+                left: "50%",
+                transform: "translateX(-50%)",
+                background: "#10B981",
+                color: "#fff",
+                borderRadius: 4,
+                padding: "2px 8px",
+                fontSize: 12,
+                fontWeight: 700,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {correctNumber}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Axis labels */}
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#888" }}>
+        <span>{guessMin}</span>
+        <span>{guessMax}</span>
+      </div>
+    </div>
+  );
+}
+
 const RENDERER_MAP: Record<string, React.ComponentType<RendererProps>> = {
   word_cloud: WordCloudRenderer,
   multiple_choice: MultipleChoiceRenderer,
@@ -1248,6 +1414,7 @@ const RENDERER_MAP: Record<string, React.ComponentType<RendererProps>> = {
   quick_form: QuickFormRenderer,
   comments: CommentsRenderer,
   gather_names: GatherNamesRenderer,
+  guess_number: GuessNumberRenderer,
 };
 
 export function getSlideRenderer(slideType: string): React.ComponentType<RendererProps> {

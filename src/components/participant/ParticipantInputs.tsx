@@ -964,6 +964,78 @@ export function GatherNamesInput({ slideData, onSubmit, disabled, submitted }: I
   );
 }
 
+export function GuessNumberInput({ slideData, onSubmit, disabled, submitted }: InputProps) {
+  const min = slideData.guessMin ?? 0;
+  const max = slideData.guessMax ?? 100;
+  const [value, setValue] = useState("");
+
+  const handleSubmit = useCallback(() => {
+    const num = parseFloat(value);
+    if (isNaN(num)) return;
+    onSubmit({ type: "guess_number", value: num });
+  }, [value, onSubmit]);
+
+  const numericValue = parseFloat(value);
+  const isValid = !isNaN(numericValue) && numericValue >= min && numericValue <= max;
+
+  return (
+    <div className="p-input">
+      <label className="p-input__label">{slideData.title}</label>
+      {slideData.subtitle && <p className="p-input__hint">{slideData.subtitle}</p>}
+      <p className="p-input__hint">Pick a number between {min} and {max}</p>
+
+      {/* Slider */}
+      <div style={{ padding: "8px 0" }}>
+        <input
+          type="range"
+          min={min}
+          max={max}
+          value={isNaN(numericValue) ? min : numericValue}
+          onChange={(e) => setValue(e.target.value)}
+          disabled={disabled || submitted}
+          style={{
+            width: "100%",
+            height: 8,
+            accentColor: "#F97316",
+            cursor: disabled || submitted ? "default" : "pointer",
+          }}
+        />
+      </div>
+
+      {/* Number input */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <input
+          className="p-input__field"
+          type="number"
+          min={min}
+          max={max}
+          placeholder={`Enter a number (${min}-${max})`}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && isValid && handleSubmit()}
+          disabled={disabled || submitted}
+          style={{ minHeight: 44, flex: 1 }}
+        />
+        <button
+          className="p-input__submit"
+          onClick={handleSubmit}
+          disabled={disabled || submitted || !isValid}
+          style={{ minHeight: 44, paddingInline: 20 }}
+        >
+          Submit
+        </button>
+      </div>
+
+      {/* Preview of selected value */}
+      {isValid && (
+        <div style={{ marginTop: 8, textAlign: "center", fontSize: 28, fontWeight: 800, color: "#F97316" }}>
+          {numericValue}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const INPUT_COMPONENT_LOOKUP: Record<string, React.ComponentType<InputProps>> = {
   word_cloud: WordCloudInput,
   multiple_choice: MultipleChoiceInput,
@@ -985,6 +1057,7 @@ const INPUT_COMPONENT_LOOKUP: Record<string, React.ComponentType<InputProps>> = 
   quick_form: QuickFormInput,
   comments: CommentsInput,
   gather_names: GatherNamesInput,
+  guess_number: GuessNumberInput,
 };
 
 export function getParticipantInputComponent(

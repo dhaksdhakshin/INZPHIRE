@@ -31,6 +31,9 @@ type SessionSlide = {
   reactions?: string[];
   maxResponseLength?: number;
   maxResponses?: number;
+  correctNumber?: number;
+  guessMin?: number;
+  guessMax?: number;
 };
 
 type SessionSnapshot = {
@@ -82,7 +85,7 @@ const TYPE_MAP: Record<string, SlideType> = {
   "image-choice": "image_choice", image_choice: "image_choice",
   "select-answer": "select_answer_quiz", select_answer: "select_answer_quiz", select_answer_quiz: "select_answer_quiz",
   "type-answer": "type_answer_quiz", type_answer: "type_answer_quiz", type_answer_quiz: "type_answer_quiz",
-  "guess-number": "scales", guess_number: "scales",
+  "guess-number": "guess_number", guess_number: "guess_number",
   timer: "timer", instructions: "instructions", content: "content",
   leaderboard: "leaderboard", reactions: "reactions",
   "quick-form": "quick_form", quick_form: "quick_form",
@@ -142,6 +145,9 @@ const toSlideData = (slide: SessionSlide): SlideData => ({
   reactions: slide.reactions ?? ["👍", "❤️", "😂", "😮", "👏"],
   maxResponseLength: slide.maxResponseLength ?? 25,
   maxResponses: slide.maxResponses ?? 5,
+  correctNumber: slide.correctNumber ?? 7,
+  guessMin: slide.guessMin ?? 0,
+  guessMax: slide.guessMax ?? 100,
   orderIndex: 0,
 });
 
@@ -538,6 +544,38 @@ function SlideInput({ slide, onSubmit, submitted }: { slide: SlideData; onSubmit
           {submitted && <SubmitConfirmation />}
         </div>
       );
+
+    case "guess_number": {
+      const min = slide.guessMin ?? 0;
+      const max = slide.guessMax ?? 100;
+      const numVal = parseFloat(val);
+      const isValid = !isNaN(numVal) && numVal >= min && numVal <= max;
+      return (
+        <div style={S.card}>
+          <div style={S.label}>{slide.title}</div>
+          {slide.subtitle && <div style={S.hint}>{slide.subtitle}</div>}
+          <div style={{ fontSize: 14, color: "#6b7280", margin: "0 0 12px" }}>Pick a number between {min} and {max}</div>
+          {/* Slider */}
+          <div style={{ padding: "8px 0" }}>
+            <input
+              type="range"
+              min={min}
+              max={max}
+              value={isNaN(numVal) ? min : numVal}
+              onChange={(e) => setVal(e.target.value)}
+              disabled={disabled}
+              style={{ width: "100%", height: 8, accentColor: "#F97316", cursor: disabled ? "default" : "pointer" }}
+            />
+          </div>
+          <div style={S.row}>
+            <input style={S.input} type="number" min={min} max={max} placeholder={`Enter a number (${min}-${max})`} value={val} onChange={(e) => setVal(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && isValid) onSubmit({ type: "guess_number", value: numVal }); }} disabled={disabled} />
+            <button style={isValid && !disabled ? S.btn : S.btnDisabled} onClick={() => { if (isValid) onSubmit({ type: "guess_number", value: numVal }); }} disabled={disabled || !isValid}>Submit</button>
+          </div>
+          {isValid && <div style={{ textAlign: "center", fontSize: 32, fontWeight: 800, color: "#F97316", marginTop: 12 }}>{numVal}</div>}
+          {submitted && <SubmitConfirmation />}
+        </div>
+      );
+    }
 
     default:
       return (
